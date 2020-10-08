@@ -119,14 +119,6 @@ impl EventLoop {
                     })
                 }
                 android_glue::Event::Wake => Some(Event::Awakened),
-                android_glue::Event::GainedFocus => Some(Event::WindowEvent {
-                    window_id: RootWindowId(WindowId),
-                    event: WindowEvent::Focused(true),
-                }),
-                android_glue::Event::LostFocus => Some(Event::WindowEvent {
-                    window_id: RootWindowId(WindowId),
-                    event: WindowEvent::Focused(false),
-                }),
                 _ => None,
             };
 
