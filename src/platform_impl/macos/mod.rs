@@ -1,5 +1,6 @@
 #![cfg(target_os = "macos")]
 
+mod activation_hack;
 mod app;
 mod app_delegate;
 mod app_state;
@@ -23,6 +24,8 @@ pub use self::{
 use crate::{
     error::OsError as RootOsError, event::DeviceId as RootDeviceId, window::WindowAttributes,
 };
+
+pub(crate) use crate::icon::NoIcon as PlatformIcon;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DeviceId;

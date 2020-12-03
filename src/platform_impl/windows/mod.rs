@@ -4,17 +4,36 @@ use winapi::{self, shared::windef::HWND};
 
 pub use self::{
     event_loop::{EventLoop, EventLoopProxy, EventLoopWindowTarget},
+    icon::WinIcon,
     monitor::{MonitorHandle, VideoMode},
     window::Window,
 };
 
-use crate::{event::DeviceId as RootDeviceId, window::Icon};
+pub use self::icon::WinIcon as PlatformIcon;
 
-#[derive(Clone, Default)]
+use crate::event::DeviceId as RootDeviceId;
+use crate::icon::Icon;
+use crate::window::Theme;
+
+#[derive(Clone)]
 pub struct PlatformSpecificWindowBuilderAttributes {
     pub parent: Option<HWND>,
     pub taskbar_icon: Option<Icon>,
     pub no_redirection_bitmap: bool,
+    pub drag_and_drop: bool,
+    pub preferred_theme: Option<Theme>,
+}
+
+impl Default for PlatformSpecificWindowBuilderAttributes {
+    fn default() -> Self {
+        Self {
+            parent: None,
+            taskbar_icon: None,
+            no_redirection_bitmap: false,
+            drag_and_drop: true,
+            preferred_theme: None,
+        }
+    }
 }
 
 unsafe impl Send for PlatformSpecificWindowBuilderAttributes {}
@@ -69,6 +88,7 @@ impl WindowId {
 
 #[macro_use]
 mod util;
+mod dark_mode;
 mod dpi;
 mod drop_handler;
 mod event;

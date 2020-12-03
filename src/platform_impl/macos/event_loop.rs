@@ -12,6 +12,7 @@ use cocoa::{
 use crate::{
     event::Event,
     event_loop::{ControlFlow, EventLoopClosed, EventLoopWindowTarget as RootWindowTarget},
+    monitor::MonitorHandle as RootMonitorHandle,
     platform_impl::platform::{
         app::APP_CLASS,
         app_delegate::APP_DELEGATE_CLASS,
@@ -31,6 +32,19 @@ impl<T> Default for EventLoopWindowTarget<T> {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel();
         EventLoopWindowTarget { sender, receiver }
+    }
+}
+
+impl<T: 'static> EventLoopWindowTarget<T> {
+    #[inline]
+    pub fn available_monitors(&self) -> VecDeque<MonitorHandle> {
+        monitor::available_monitors()
+    }
+
+    #[inline]
+    pub fn primary_monitor(&self) -> Option<RootMonitorHandle> {
+        let monitor = monitor::primary_monitor();
+        Some(RootMonitorHandle { inner: monitor })
     }
 }
 
@@ -68,23 +82,13 @@ impl<T> EventLoop<T> {
         }
     }
 
-    #[inline]
-    pub fn available_monitors(&self) -> VecDeque<MonitorHandle> {
-        monitor::available_monitors()
-    }
-
-    #[inline]
-    pub fn primary_monitor(&self) -> MonitorHandle {
-        monitor::primary_monitor()
-    }
-
     pub fn window_target(&self) -> &RootWindowTarget<T> {
         &self.window_target
     }
 
     pub fn run<F>(mut self, callback: F) -> !
     where
-        F: 'static + FnMut(Event<T>, &RootWindowTarget<T>, &mut ControlFlow),
+        F: 'static + FnMut(Event<'_, T>, &RootWindowTarget<T>, &mut ControlFlow),
     {
         self.run_return(callback);
         process::exit(0);
@@ -92,15 +96,16 @@ impl<T> EventLoop<T> {
 
     pub fn run_return<F>(&mut self, callback: F)
     where
-        F: FnMut(Event<T>, &RootWindowTarget<T>, &mut ControlFlow),
+        F: FnMut(Event<'_, T>, &RootWindowTarget<T>, &mut ControlFlow),
     {
         unsafe {
-            let _pool = NSAutoreleasePool::new(nil);
+            let pool = NSAutoreleasePool::new(nil);
             let app = NSApp();
             assert_ne!(app, nil);
             AppState::set_callback(callback, Rc::clone(&self.window_target));
             let _: () = msg_send![app, run];
             AppState::exit();
+            pool.drain();
         }
     }
 
@@ -115,6 +120,14 @@ pub struct Proxy<T> {
 }
 
 unsafe impl<T: Send> Send for Proxy<T> {}
+
+impl<T> Drop for Proxy<T> {
+    fn drop(&mut self) {
+        unsafe {
+            CFRelease(self.source as _);
+        }
+    }
+}
 
 impl<T> Clone for Proxy<T> {
     fn clone(&self) -> Self {
@@ -132,7 +145,7 @@ impl<T> Proxy<T> {
             // process user events through the normal OS EventLoop mechanisms.
             let rl = CFRunLoopGetMain();
             let mut context: CFRunLoopSourceContext = mem::zeroed();
-            context.perform = event_loop_proxy_handler;
+            context.perform = Some(event_loop_proxy_handler);
             let source =
                 CFRunLoopSourceCreate(ptr::null_mut(), CFIndex::max_value() - 1, &mut context);
             CFRunLoopAddSource(rl, source, kCFRunLoopCommonModes);
@@ -142,8 +155,10 @@ impl<T> Proxy<T> {
         }
     }
 
-    pub fn send_event(&self, event: T) -> Result<(), EventLoopClosed> {
-        self.sender.send(event).map_err(|_| EventLoopClosed)?;
+    pub fn send_event(&self, event: T) -> Result<(), EventLoopClosed<T>> {
+        self.sender
+            .send(event)
+            .map_err(|mpsc::SendError(x)| EventLoopClosed(x))?;
         unsafe {
             // let the main thread know there's a new event
             CFRunLoopSourceSignal(self.source);

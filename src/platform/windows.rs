@@ -1,16 +1,19 @@
 #![cfg(target_os = "windows")]
 
 use std::os::raw::c_void;
+use std::path::Path;
 
 use libc;
+use winapi::shared::minwindef::WORD;
 use winapi::shared::windef::HWND;
 
 use crate::{
+    dpi::PhysicalSize,
     event::DeviceId,
     event_loop::EventLoop,
     monitor::MonitorHandle,
-    platform_impl::EventLoop as WindowsEventLoop,
-    window::{Icon, Window, WindowBuilder},
+    platform_impl::{EventLoop as WindowsEventLoop, WinIcon},
+    window::{BadIcon, Icon, Theme, Window, WindowBuilder},
 };
 
 /// Additional methods on `EventLoop` that are specific to Windows.
@@ -77,6 +80,9 @@ pub trait WindowExtWindows {
 
     /// This sets `ICON_BIG`. A good ceiling here is 256x256.
     fn set_taskbar_icon(&self, taskbar_icon: Option<Icon>);
+
+    /// Returns the current window theme.
+    fn theme(&self) -> Theme;
 }
 
 impl WindowExtWindows for Window {
@@ -94,6 +100,11 @@ impl WindowExtWindows for Window {
     fn set_taskbar_icon(&self, taskbar_icon: Option<Icon>) {
         self.window.set_taskbar_icon(taskbar_icon)
     }
+
+    #[inline]
+    fn theme(&self) -> Theme {
+        self.window.theme()
+    }
 }
 
 /// Additional methods on `WindowBuilder` that are specific to Windows.
@@ -106,6 +117,17 @@ pub trait WindowBuilderExtWindows {
 
     /// This sets `WS_EX_NOREDIRECTIONBITMAP`.
     fn with_no_redirection_bitmap(self, flag: bool) -> WindowBuilder;
+
+    /// Enables or disables drag and drop support (enabled by default). Will interfere with other crates
+    /// that use multi-threaded COM API (`CoInitializeEx` with `COINIT_MULTITHREADED` instead of
+    /// `COINIT_APARTMENTTHREADED`) on the same thread. Note that winit may still attempt to initialize
+    /// COM API regardless of this option. Currently only fullscreen mode does that, but there may be more in the future.
+    /// If you need COM API with `COINIT_MULTITHREADED` you must initialize it before calling any winit functions.
+    /// See https://docs.microsoft.com/en-us/windows/win32/api/objbase/nf-objbase-coinitialize#remarks for more information.
+    fn with_drag_and_drop(self, flag: bool) -> WindowBuilder;
+
+    /// Forces a theme or uses the system settings if `None` was provided.
+    fn with_theme(self, theme: Option<Theme>) -> WindowBuilder;
 }
 
 impl WindowBuilderExtWindows for WindowBuilder {
@@ -124,6 +146,18 @@ impl WindowBuilderExtWindows for WindowBuilder {
     #[inline]
     fn with_no_redirection_bitmap(mut self, flag: bool) -> WindowBuilder {
         self.platform_specific.no_redirection_bitmap = flag;
+        self
+    }
+
+    #[inline]
+    fn with_drag_and_drop(mut self, flag: bool) -> WindowBuilder {
+        self.platform_specific.drag_and_drop = flag;
+        self
+    }
+
+    #[inline]
+    fn with_theme(mut self, theme: Option<Theme>) -> WindowBuilder {
+        self.platform_specific.preferred_theme = theme;
         self
     }
 }
@@ -161,5 +195,42 @@ impl DeviceIdExtWindows for DeviceId {
     #[inline]
     fn persistent_identifier(&self) -> Option<String> {
         self.0.persistent_identifier()
+    }
+}
+
+/// Additional methods on `Icon` that are specific to Windows.
+pub trait IconExtWindows: Sized {
+    /// Create an icon from a file path.
+    ///
+    /// Specify `size` to load a specific icon size from the file, or `None` to load the default
+    /// icon size from the file.
+    ///
+    /// In cases where the specified size does not exist in the file, Windows may perform scaling
+    /// to get an icon of the desired size.
+    fn from_path<P: AsRef<Path>>(path: P, size: Option<PhysicalSize<u32>>)
+        -> Result<Self, BadIcon>;
+
+    /// Create an icon from a resource embedded in this executable or library.
+    ///
+    /// Specify `size` to load a specific icon size from the file, or `None` to load the default
+    /// icon size from the file.
+    ///
+    /// In cases where the specified size does not exist in the file, Windows may perform scaling
+    /// to get an icon of the desired size.
+    fn from_resource(ordinal: WORD, size: Option<PhysicalSize<u32>>) -> Result<Self, BadIcon>;
+}
+
+impl IconExtWindows for Icon {
+    fn from_path<P: AsRef<Path>>(
+        path: P,
+        size: Option<PhysicalSize<u32>>,
+    ) -> Result<Self, BadIcon> {
+        let win_icon = WinIcon::from_path(path, size)?;
+        Ok(Icon { inner: win_icon })
+    }
+
+    fn from_resource(ordinal: WORD, size: Option<PhysicalSize<u32>>) -> Result<Self, BadIcon> {
+        let win_icon = WinIcon::from_resource(ordinal, size)?;
+        Ok(Icon { inner: win_icon })
     }
 }
