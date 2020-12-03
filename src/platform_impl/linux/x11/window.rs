@@ -1306,7 +1306,7 @@ impl UnownedWindow {
             .expect("Failed to set urgency hint");
     }
 
-    fn set_focus_inner(&self) -> util::Flusher<'_> {
+    fn focus_window_inner(&self) -> util::Flusher<'_> {
         unsafe {
             let atom = self.xconn.get_atom_unchecked(b"_NET_ACTIVE_WINDOW\0");
             self.xconn.send_client_msg(
@@ -1318,21 +1318,22 @@ impl UnownedWindow {
             )
         }
     }
-
+    
     #[inline]
     pub fn focus_window(&self) {
-        let state_atom = self.xconn.get_atom_unchecked(b"WM_STATE\0");
+        let state_atom = unsafe { self.xconn.get_atom_unchecked(b"WM_STATE\0") };
         let is_minimized = if let Ok(state) =
             self.xconn
                 .get_property(self.xwindow, state_atom, state_atom)
         {
-            state.contains(&ffi::IconicState)
+            state.contains(&(3 as i64))
+        } else {
+            false
         };
         let is_visible = match self.shared_state.lock().visibility {
             Visibility::Yes => true,
             Visibility::YesWait | Visibility::No => false,
         };
-
         if is_visible && !is_minimized {
             self.focus_window_inner()
                 .flush()
