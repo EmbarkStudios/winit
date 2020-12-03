@@ -1306,6 +1306,40 @@ impl UnownedWindow {
             .expect("Failed to set urgency hint");
     }
 
+    fn set_focus_inner(&self) -> util::Flusher<'_> {
+        unsafe {
+            let atom = self.xconn.get_atom_unchecked(b"_NET_ACTIVE_WINDOW\0");
+            self.xconn.send_client_msg(
+                self.xwindow,
+                self.root,
+                atom,
+                Some(ffi::SubstructureRedirectMask | ffi::SubstructureNotifyMask),
+                [1, ffi::CurrentTime as c_long, 0, 0, 0],
+            )
+        }
+    }
+
+    #[inline]
+    pub fn focus_window(&self) {
+        let state_atom = self.xconn.get_atom_unchecked(b"WM_STATE\0");
+        let is_minimized = if let Ok(state) =
+            self.xconn
+                .get_property(self.xwindow, state_atom, state_atom)
+        {
+            state.contains(&ffi::IconicState)
+        };
+        let is_visible = match self.shared_state.lock().visibility {
+            Visibility::Yes => true,
+            Visibility::YesWait | Visibility::No => false,
+        };
+
+        if is_visible && !is_minimized {
+            self.focus_window_inner()
+                .flush()
+                .expect("Failed to focus window");
+        }
+    }
+
     #[inline]
     pub fn id(&self) -> WindowId {
         WindowId(self.xwindow)

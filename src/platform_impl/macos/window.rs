@@ -281,6 +281,7 @@ lazy_static! {
 #[derive(Default)]
 pub struct SharedState {
     pub resizable: bool,
+    pub visible: bool,
     pub fullscreen: Option<Fullscreen>,
     // This is true between windowWillEnterFullScreen and windowDidEnterFullScreen
     // or windowWillExitFullScreen and windowDidExitFullScreen.
@@ -461,6 +462,7 @@ impl UnownedWindow {
     }
 
     pub fn set_visible(&self, visible: bool) {
+        self.shared_state.lock().unwrap().visible = visible;
         match visible {
             true => unsafe { util::make_key_and_order_front_async(*self.ns_window) },
             false => unsafe { util::order_out_async(*self.ns_window) },
@@ -988,6 +990,20 @@ impl UnownedWindow {
         unsafe {
             if let Some(ty) = ns_request_type {
                 NSApp().requestUserAttention_(ty);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn focus_window(&self) {
+        let is_minimized: BOOL = unsafe { msg_send![*self.ns_window, isMiniaturized] };
+        let is_minimized = is_minimized == YES;
+        let is_visible = self.shared_state.lock().unwrap().visible;
+
+        if !is_minimized && is_visible {
+            unsafe {
+                NSApp().activateIgnoringOtherApps_(YES);
+                util::make_key_and_order_front_async(*self.ns_window);
             }
         }
     }
