@@ -555,7 +555,25 @@ impl<T: 'static> EventLoop<T> {
 
                     let state = match key.action() {
                         KeyAction::Down => event::ElementState::Pressed,
-                        KeyAction::Up => event::ElementState::Released,
+                        KeyAction::Up => {
+                            match get_character_from_key(key.key_code())
+                                {
+                                    Some(character) => {
+                                        let event = event::Event::WindowEvent {
+                                            window_id: window::WindowId(WindowId),
+                                            event: event::WindowEvent::ReceivedCharacter(character)
+                                        };
+                                        sticky_exit_callback(
+                                            event,
+                                            self.window_target(),
+                                            control_flow,
+                                            callback
+                                        );
+                                    },
+                                    None => {}
+                                };
+                            event::ElementState::Released
+                        },
                         _ => event::ElementState::Released,
                     };
                     #[allow(deprecated)]
@@ -1183,5 +1201,74 @@ impl VideoMode {
 
     pub fn monitor(&self) -> MonitorHandle {
         self.monitor.clone()
+    }
+}
+
+pub fn get_character_from_key(key_code: Keycode) -> Option<char> {
+    match key_code {
+        Keycode::A => Some('A'),
+        Keycode::B => Some('B'),
+        Keycode::C => Some('C'),
+        Keycode::D => Some('D'),
+        Keycode::E => Some('E'),
+        Keycode::F => Some('F'),
+        Keycode::G => Some('G'),
+        Keycode::H => Some('H'),
+        Keycode::I => Some('I'),
+        Keycode::J => Some('J'),
+        Keycode::K => Some('K'),
+        Keycode::L => Some('L'),
+        Keycode::M => Some('M'),
+        Keycode::N => Some('N'),
+        Keycode::O => Some('O'),
+        Keycode::P => Some('P'),
+        Keycode::Q => Some('Q'),
+        Keycode::R => Some('R'),
+        Keycode::S => Some('S'),
+        Keycode::T => Some('T'),
+        Keycode::U => Some('U'),
+        Keycode::V => Some('V'),
+        Keycode::W => Some('W'),
+        Keycode::X => Some('X'),
+        Keycode::Y => Some('Y'),
+        Keycode::Z => Some('Z'),
+
+        Keycode::Keycode0 => Some('0'),
+        Keycode::Keycode1 => Some('1'),
+        Keycode::Keycode2 => Some('2'),
+        Keycode::Keycode3 => Some('3'),
+        Keycode::Keycode4 => Some('4'),
+        Keycode::Keycode5 => Some('5'),
+        Keycode::Keycode6 => Some('6'),
+        Keycode::Keycode7 => Some('7'),
+        Keycode::Keycode8 => Some('8'),
+        Keycode::Keycode9 => Some('9'),
+
+        Keycode::Numpad0 => Some('0'),
+        Keycode::Numpad1 => Some('1'),
+        Keycode::Numpad2 => Some('2'),
+        Keycode::Numpad3 => Some('3'),
+        Keycode::Numpad4 => Some('4'),
+        Keycode::Numpad5 => Some('5'),
+        Keycode::Numpad6 => Some('6'),
+        Keycode::Numpad7 => Some('7'),
+        Keycode::Numpad8 => Some('8'),
+        Keycode::Numpad9 => Some('9'),
+
+        Keycode::Plus => Some('+'),
+        Keycode::Minus => Some('-'),
+        Keycode::Equals => Some('='),
+        // TODO: Somehow figure out how to make the difference between colon and semicolon
+        // In order to type in http:... we need colon and not semicolon, hence the change.
+        Keycode::Semicolon => Some(':'),
+        Keycode::Slash => Some('/'),
+        Keycode::Backslash => Some('\\'),
+        Keycode::Comma => Some(','),
+        Keycode::Period => Some('.'),
+        Keycode::Apostrophe => Some('\''),
+        Keycode::At => Some('@'),
+        Keycode::Space => Some(' '),
+
+        _ => None,
     }
 }
