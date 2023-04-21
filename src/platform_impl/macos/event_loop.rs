@@ -5,7 +5,7 @@ use std::{
     marker::PhantomData,
     mem,
     os::raw::c_void,
-    panic::{catch_unwind, resume_unwind, RefUnwindSafe, UnwindSafe},
+    panic::{catch_unwind, resume_unwind, AssertUnwindSafe, RefUnwindSafe, UnwindSafe},
     ptr,
     rc::{Rc, Weak},
     sync::mpsc,
@@ -203,10 +203,15 @@ impl<T> EventLoop<T> {
             return Err(ExternalError::AlreadyRunning);
         }
 
-        // This transmute is always safe, in case it was reached through `run`, since our
-        // lifetime will be already 'static. In other cases caller should ensure that all data
-        // they passed to callback will actually outlive it, some apps just can't move
-        // everything to event loop, so this is something that they should care about.
+        // # Safety
+        // We are erasing the lifetime of the application callback here so that we
+        // can (temporarily) store it within 'static global `AppState` that's
+        // accessible to objc delegate callbacks.
+        //
+        // The safety of this depends on on making sure to also clear the callback
+        // from the global `AppState` before we return from here, ensuring that
+        // we don't retain a reference beyond the real lifetime of the callback.
+
         let callback = unsafe {
             mem::transmute::<
                 Rc<RefCell<dyn FnMut(Event<'_, T>, &RootWindowTarget<T>, &mut ControlFlow)>>,
@@ -224,23 +229,46 @@ impl<T> EventLoop<T> {
             let weak_cb: Weak<_> = Rc::downgrade(&callback);
             drop(callback);
 
-            AppState::set_callback(weak_cb, Rc::clone(&self.window_target));
-
-            if AppState::is_launched() {
-                debug_assert!(!AppState::is_running());
-                AppState::start_running(); // Set is_running = true + dispatch `NewEvents(Init)` + `Resumed`
+            // # Safety
+            // We make sure to call `AppState::clear_callback` before returning
+            unsafe {
+                AppState::set_callback(weak_cb, Rc::clone(&self.window_target));
             }
-            AppState::set_stop_app_before_wait(false);
-            unsafe { app.run() };
 
-            if let Some(panic) = self.panic_info.take() {
-                drop(self._callback.take());
-                AppState::clear_callback();
-                resume_unwind(panic);
+            // catch panics to make sure we can't unwind without clearing the set callback
+            // (which would leave the global `AppState` in an undefined, unsafe state)
+            let catch_result = catch_unwind(AssertUnwindSafe(|| {
+                if AppState::is_launched() {
+                    debug_assert!(!AppState::is_running());
+                    AppState::start_running(); // Set is_running = true + dispatch `NewEvents(Init)` + `Resumed`
+                }
+                AppState::set_stop_app_before_wait(false);
+                unsafe { app.run() };
+
+                // While the app is running it's possible that we catch a panic
+                // to avoid unwinding across an objective-c ffi boundary, which
+                // will lead to us stopping the `NSApp` and saving the
+                // `PanicInfo` so that we can resume the unwind at a controlled,
+                // safe point in time.
+                if let Some(panic) = self.panic_info.take() {
+                    resume_unwind(panic);
+                }
+
+                AppState::exit()
+            }));
+
+            // # Safety
+            // This pairs up with the `unsafe` call to `set_callback` above and ensures that
+            // we always clear the application callback from the global `AppState` before
+            // returning
+            drop(self._callback.take());
+            AppState::clear_callback();
+
+            match catch_result {
+                Ok(exit_code) => exit_code,
+                Err(payload) => resume_unwind(payload),
             }
-            AppState::exit()
         });
-        drop(self._callback.take());
 
         if exit_code == 0 {
             Ok(())
@@ -253,10 +281,15 @@ impl<T> EventLoop<T> {
     where
         F: FnMut(Event<'_, T>, &RootWindowTarget<T>, &mut ControlFlow),
     {
-        // This transmute is always safe, in case it was reached through `run`, since our
-        // lifetime will be already 'static. In other cases caller should ensure that all data
-        // they passed to callback will actually outlive it, some apps just can't move
-        // everything to event loop, so this is something that they should care about.
+        // # Safety
+        // We are erasing the lifetime of the application callback here so that we
+        // can (temporarily) store it within 'static global `AppState` that's
+        // accessible to objc delegate callbacks.
+        //
+        // The safety of this depends on on making sure to also clear the callback
+        // from the global `AppState` before we return from here, ensuring that
+        // we don't retain a reference beyond the real lifetime of the callback.
+
         let callback = unsafe {
             mem::transmute::<
                 Rc<RefCell<dyn FnMut(Event<'_, T>, &RootWindowTarget<T>, &mut ControlFlow)>>,
@@ -274,49 +307,73 @@ impl<T> EventLoop<T> {
             let weak_cb: Weak<_> = Rc::downgrade(&callback);
             drop(callback);
 
-            AppState::set_callback(weak_cb, Rc::clone(&self.window_target));
-
-            // Note: there are two possible `Init` conditions we have to handle - either the
-            // `NSApp` is not yet launched, or else the `EventLoop` is not yet running.
-
-            // As a special case, if the `NSApp` hasn't been launched yet then we at least run
-            // the loop until it has fully launched.
-            if !AppState::is_launched() {
-                debug_assert!(!AppState::is_running());
-
-                AppState::request_stop_on_launch();
-                unsafe {
-                    app.run();
-                }
-
-                // Note: we dispatch `NewEvents(Init)` + `Resumed` events after the `NSApp` has launched
-            } else if !AppState::is_running() {
-                AppState::start_running(); // Set is_running = true + dispatch `NewEvents(Init)` + `Resumed`
-            } else {
-                AppState::set_stop_app_before_wait(true);
-                unsafe {
-                    app.run();
-                }
+            // # Safety
+            // We will make sure to call `AppState::clear_callback` before returning
+            // to ensure that we don't hold on to the callback beyond its (erased)
+            // lifetime
+            unsafe {
+                AppState::set_callback(weak_cb, Rc::clone(&self.window_target));
             }
 
-            if let Some(panic) = self.panic_info.take() {
-                drop(self._callback.take());
-                AppState::clear_callback();
-                resume_unwind(panic);
+            // catch panics to make sure we can't unwind without clearing the set callback
+            // (which would leave the global `AppState` in an undefined, unsafe state)
+            let catch_result = catch_unwind(AssertUnwindSafe(|| {
+                // As a special case, if the `NSApp` hasn't been launched yet then we at least run
+                // the loop until it has fully launched.
+                if !AppState::is_launched() {
+                    debug_assert!(!AppState::is_running());
+
+                    AppState::request_stop_on_launch();
+                    unsafe {
+                        app.run();
+                    }
+
+                    // Note: we dispatch `NewEvents(Init)` + `Resumed` events after the `NSApp` has launched
+                } else if !AppState::is_running() {
+                    // Even though the NSApp may have been launched, it's possible we aren't running
+                    // if the `EventLoop` was run before and has since exited. This indicates that
+                    // we just starting to re-run the same `EventLoop` again.
+                    AppState::start_running(); // Set is_running = true + dispatch `NewEvents(Init)` + `Resumed`
+                } else {
+                    // Make sure we can't block any external loop indefinitely by stopping the NSApp
+                    // and returning after dispatching any `RedrawRequested` event or whenever the
+                    // `RunLoop` needs to wait for new events from the OS
+                    AppState::set_stop_app_on_redraw_requested(true);
+                    AppState::set_stop_app_before_wait(true);
+                    unsafe {
+                        app.run();
+                    }
+                }
+
+                // While the app is running it's possible that we catch a panic
+                // to avoid unwinding across an objective-c ffi boundary, which
+                // will lead to us stopping the `NSApp` and saving the
+                // `PanicInfo` so that we can resume the unwind at a controlled,
+                // safe point in time.
+                if let Some(panic) = self.panic_info.take() {
+                    resume_unwind(panic);
+                }
+
+                if let ControlFlow::ExitWithCode(code) = AppState::control_flow() {
+                    AppState::exit();
+                    PumpStatus::Exit(code)
+                } else {
+                    PumpStatus::Continue
+                }
+            }));
+
+            // # Safety
+            // This pairs up with the `unsafe` call to `set_callback` above and ensures that
+            // we always clear the application callback from the global `AppState` before
+            // returning
+            AppState::clear_callback();
+            drop(self._callback.take());
+
+            match catch_result {
+                Ok(pump_status) => pump_status,
+                Err(payload) => resume_unwind(payload),
             }
-        });
-
-        let status = if let ControlFlow::ExitWithCode(code) = AppState::control_flow() {
-            AppState::exit();
-            PumpStatus::Exit(code)
-        } else {
-            PumpStatus::Continue
-        };
-
-        AppState::clear_callback();
-        drop(self._callback.take());
-
-        status
+        })
     }
 
     pub fn create_proxy(&self) -> EventLoopProxy<T> {

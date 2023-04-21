@@ -59,6 +59,9 @@ extern_methods!(
     }
 
     unsafe impl NSView {
+        #[sel(setNeedsDisplay:)]
+        pub fn setNeedsDisplay(&self, needs_display: bool);
+
         #[sel(setWantsBestResolutionOpenGLSurface:)]
         pub fn setWantsBestResolutionOpenGLSurface(&self, value: bool);
 

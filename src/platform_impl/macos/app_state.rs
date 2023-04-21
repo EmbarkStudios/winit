@@ -121,6 +121,7 @@ impl<T> EventHandler for EventLoopHandler<T> {
 struct Handler {
     stop_app_on_launch: AtomicBool,
     stop_app_before_wait: AtomicBool,
+    stop_app_on_redraw: AtomicBool,
     launched: AtomicBool,
     running: AtomicBool,
     in_callback: AtomicBool,
@@ -215,6 +216,8 @@ impl Handler {
         self.running.store(false, Ordering::Relaxed);
         *self.control_flow_prev.lock().unwrap() = ControlFlow::default();
         *self.control_flow.lock().unwrap() = ControlFlow::default();
+        self.set_stop_app_on_redraw_requested(false);
+        self.set_stop_app_before_wait(false);
     }
 
     pub fn request_stop_app_on_launch(&self) {
@@ -240,6 +243,19 @@ impl Handler {
         // Relaxed ordering because we don't actually have multiple threads involved, we just want
         // interior mutability
         self.stop_app_before_wait.load(Ordering::Relaxed)
+    }
+
+    pub fn set_stop_app_on_redraw_requested(&self, stop_on_redraw: bool) {
+        // Relaxed ordering because we don't actually have multiple threads involved, we just want
+        // interior mutability
+        self.stop_app_on_redraw
+            .store(stop_on_redraw, Ordering::Relaxed);
+    }
+
+    pub fn should_stop_app_on_redraw_requested(&self) -> bool {
+        // Relaxed ordering because we don't actually have multiple threads involved, we just want
+        // interior mutability
+        self.stop_app_on_redraw.load(Ordering::Relaxed)
     }
 
     fn get_control_flow_and_update_prev(&self) -> ControlFlow {
@@ -343,11 +359,28 @@ impl Handler {
 pub(crate) enum AppState {}
 
 impl AppState {
-    pub fn set_callback<T>(callback: Weak<Callback<T>>, window_target: Rc<RootWindowTarget<T>>) {
+    /// Associate the application's event callback with the (global static) Handler state
+    ///
+    /// # Safety
+    /// This is ignoring the lifetime of the application callback (which may not be 'static)
+    /// and can lead to undefined behaviour if the callback is not cleared before the end of
+    /// its real lifetime.
+    ///
+    /// All public APIs that take an event callback (`run`, `run_ondemand`,
+    /// `pump_events`) _must_ pair a call to `set_callback` with
+    /// a call to `clear_callback` before returning to avoid undefined behaviour.
+    pub unsafe fn set_callback<T>(
+        callback: Weak<Callback<T>>,
+        window_target: Rc<RootWindowTarget<T>>,
+    ) {
         *HANDLER.callback.lock().unwrap() = Some(Box::new(EventLoopHandler {
             callback,
             window_target,
         }));
+    }
+
+    pub fn clear_callback() {
+        HANDLER.callback.lock().unwrap().take();
     }
 
     pub fn is_launched() -> bool {
@@ -369,12 +402,12 @@ impl AppState {
         HANDLER.set_stop_app_before_wait(stop_before_wait);
     }
 
-    pub fn control_flow() -> ControlFlow {
-        HANDLER.get_old_and_new_control_flow().1
+    pub fn set_stop_app_on_redraw_requested(stop_on_redraw: bool) {
+        HANDLER.set_stop_app_on_redraw_requested(stop_on_redraw);
     }
 
-    pub fn clear_callback() {
-        HANDLER.callback.lock().unwrap().take();
+    pub fn control_flow() -> ControlFlow {
+        HANDLER.get_old_and_new_control_flow().1
     }
 
     pub fn exit() -> i32 {
@@ -506,6 +539,12 @@ impl AppState {
             HANDLER
                 .handle_nonuser_event(EventWrapper::StaticEvent(Event::RedrawRequested(window_id)));
             HANDLER.set_in_callback(false);
+
+            // `pump_events` will request to stop immediately _after_ dispatching RedrawRequested events
+            // as a way to ensure that `pump_events` can't block an external loop indefinitely
+            if HANDLER.should_stop_app_on_redraw_requested() {
+                AppState::stop();
+            }
         }
     }
 
@@ -548,6 +587,7 @@ impl AppState {
             HANDLER.handle_nonuser_event(event);
         }
         HANDLER.handle_nonuser_event(EventWrapper::StaticEvent(Event::MainEventsCleared));
+
         for window_id in HANDLER.should_redraw() {
             HANDLER
                 .handle_nonuser_event(EventWrapper::StaticEvent(Event::RedrawRequested(window_id)));

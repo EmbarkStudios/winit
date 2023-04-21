@@ -4,8 +4,8 @@ use std::{boxed::Box, os::raw::*, ptr, str, sync::Mutex};
 
 use objc2::declare::{Ivar, IvarDrop};
 use objc2::foundation::{
-    NSArray, NSAttributedString, NSAttributedStringKey, NSCopying, NSMutableAttributedString,
-    NSObject, NSPoint, NSRange, NSRect, NSSize, NSString, NSUInteger,
+    NSArray, NSAttributedString, NSAttributedStringKey, NSCopying,
+    NSMutableAttributedString, NSObject, NSPoint, NSRange, NSRect, NSSize, NSString, NSUInteger,
 };
 use objc2::rc::{Id, Owned, Shared, WeakId};
 use objc2::runtime::{Object, Sel};
