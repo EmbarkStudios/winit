@@ -6,19 +6,12 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use windows_sys::{
-    core::{IUnknown, GUID, HRESULT},
-    Win32::{
-        Foundation::{DV_E_FORMATETC, HWND, POINTL, S_OK},
-        System::{
-            Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL},
-            Ole::{CF_HDROP, DROPEFFECT_COPY, DROPEFFECT_NONE},
-        },
-        UI::Shell::{DragFinish, DragQueryFileW, HDROP},
-    },
-};
-
 use crate::platform_impl::platform::{
+    bindings::{
+        DragFinish, DragQueryFileW, IDataObject, IUnknown, CF_HDROP, DROPEFFECT_COPY,
+        DROPEFFECT_NONE, DVASPECT_CONTENT, DV_E_FORMATETC, FORMATETC, GUID, HDROP, HRESULT, HWND,
+        POINTL, S_OK, TYMED_HGLOBAL,
+    },
     definitions::{IDataObjectVtbl, IDropTarget, IDropTargetVtbl, IUnknownVtbl},
     WindowId,
 };
@@ -177,7 +170,7 @@ impl FileDropHandler {
         let get_data_fn = (*(*data_obj).cast::<IDataObjectVtbl>()).GetData;
         let get_data_result = get_data_fn(data_obj as *mut _, &drop_format, &mut medium);
         if get_data_result >= 0 {
-            let hdrop = medium.Anonymous.hGlobal;
+            let hdrop = medium.u.hGlobal;
 
             // The second parameter (0xFFFFFFFF) instructs the function to return the item count
             let item_count = DragQueryFileW(hdrop, 0xFFFFFFFF, ptr::null_mut(), 0);

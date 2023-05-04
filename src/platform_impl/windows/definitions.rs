@@ -1,17 +1,8 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
+use super::bindings::*;
 use std::ffi::c_void;
-
-use windows_sys::{
-    core::{IUnknown, GUID, HRESULT},
-    Win32::{
-        Foundation::{BOOL, HWND, POINTL},
-        System::Com::{
-            IAdviseSink, IDataObject, IEnumFORMATETC, IEnumSTATDATA, FORMATETC, STGMEDIUM,
-        },
-    },
-};
 
 #[repr(C)]
 pub struct IUnknownVtbl {

@@ -1,10 +1,6 @@
 #![cfg(windows_platform)]
 
-use windows_sys::Win32::{
-    Foundation::{HANDLE, HWND},
-    UI::WindowsAndMessaging::{HMENU, WINDOW_LONG_PTR_INDEX},
-};
-
+use self::bindings::HWND;
 pub(crate) use self::{
     event_loop::{
         EventLoop, EventLoopProxy, EventLoopWindowTarget, PlatformSpecificEventLoopAttributes,
@@ -23,7 +19,7 @@ use crate::icon::Icon;
 #[derive(Clone)]
 pub struct PlatformSpecificWindowBuilderAttributes {
     pub owner: Option<HWND>,
-    pub menu: Option<HMENU>,
+    pub menu: Option<bindings::HMENU>,
     pub taskbar_icon: Option<Icon>,
     pub no_redirection_bitmap: bool,
     pub drag_and_drop: bool,
@@ -66,7 +62,7 @@ impl DeviceId {
 impl DeviceId {
     pub fn persistent_identifier(&self) -> Option<String> {
         if self.0 != 0 {
-            raw_input::get_raw_input_device_name(self.0 as HANDLE)
+            raw_input::get_raw_input_device_name(self.0 as bindings::HANDLE)
         } else {
             None
         }
@@ -137,27 +133,28 @@ const fn hiword(x: u32) -> u16 {
 }
 
 #[inline(always)]
-unsafe fn get_window_long(hwnd: HWND, nindex: WINDOW_LONG_PTR_INDEX) -> isize {
+unsafe fn get_window_long(hwnd: HWND, nindex: bindings::WINDOW_LONG_PTR_INDEX) -> isize {
     #[cfg(target_pointer_width = "64")]
-    return windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, nindex);
+    return bindings::GetWindowLongPtrW(hwnd, nindex);
     #[cfg(target_pointer_width = "32")]
-    return windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongW(hwnd, nindex) as isize;
+    return bindings::GetWindowLongW(hwnd, nindex) as isize;
 }
 
 #[inline(always)]
-unsafe fn set_window_long(hwnd: HWND, nindex: WINDOW_LONG_PTR_INDEX, dwnewlong: isize) -> isize {
+unsafe fn set_window_long(
+    hwnd: HWND,
+    nindex: bindings::WINDOW_LONG_PTR_INDEX,
+    dwnewlong: isize,
+) -> isize {
     #[cfg(target_pointer_width = "64")]
-    return windows_sys::Win32::UI::WindowsAndMessaging::SetWindowLongPtrW(hwnd, nindex, dwnewlong);
+    return bindings::SetWindowLongPtrW(hwnd, nindex, dwnewlong);
     #[cfg(target_pointer_width = "32")]
-    return windows_sys::Win32::UI::WindowsAndMessaging::SetWindowLongW(
-        hwnd,
-        nindex,
-        dwnewlong as i32,
-    ) as isize;
+    return bindings::SetWindowLongW(hwnd, nindex, dwnewlong as i32) as isize;
 }
 
 #[macro_use]
 mod util;
+mod bindings;
 mod dark_mode;
 mod definitions;
 mod dpi;

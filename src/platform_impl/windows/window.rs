@@ -10,52 +10,13 @@ use std::{
     sync::{mpsc::channel, Arc, Mutex, MutexGuard},
 };
 
-use windows_sys::Win32::{
-    Foundation::{
-        HINSTANCE, HWND, LPARAM, OLE_E_WRONGCOMPOBJ, POINT, POINTS, RECT, RPC_E_CHANGED_MODE, S_OK,
-        WPARAM,
-    },
-    Graphics::{
-        Dwm::{DwmEnableBlurBehindWindow, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND},
-        Gdi::{
-            ChangeDisplaySettingsExW, ClientToScreen, CreateRectRgn, DeleteObject, InvalidateRgn,
-            RedrawWindow, CDS_FULLSCREEN, DISP_CHANGE_BADFLAGS, DISP_CHANGE_BADMODE,
-            DISP_CHANGE_BADPARAM, DISP_CHANGE_FAILED, DISP_CHANGE_SUCCESSFUL, RDW_INTERNALPAINT,
-        },
-    },
-    System::{
-        Com::{
-            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED,
-        },
-        Ole::{OleInitialize, RegisterDragDrop},
-    },
-    UI::{
-        Input::{
-            KeyboardAndMouse::{
-                EnableWindow, GetActiveWindow, MapVirtualKeyW, ReleaseCapture, SendInput, INPUT,
-                INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP,
-                MAPVK_VK_TO_VSC, VK_LMENU, VK_MENU,
-            },
-            Touch::{RegisterTouchWindow, TWF_WANTPALM},
-        },
-        WindowsAndMessaging::{
-            CreateWindowExW, FlashWindowEx, GetClientRect, GetCursorPos, GetForegroundWindow,
-            GetSystemMetrics, GetWindowPlacement, GetWindowTextLengthW, GetWindowTextW,
-            IsWindowVisible, LoadCursorW, PeekMessageW, PostMessageW, RegisterClassExW, SetCursor,
-            SetCursorPos, SetForegroundWindow, SetWindowDisplayAffinity, SetWindowPlacement,
-            SetWindowPos, SetWindowTextW, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, FLASHWINFO,
-            FLASHW_ALL, FLASHW_STOP, FLASHW_TIMERNOFG, FLASHW_TRAY, GWLP_HINSTANCE, HTCAPTION,
-            NID_READY, PM_NOREMOVE, SM_DIGITIZER, SWP_ASYNCWINDOWPOS, SWP_NOACTIVATE, SWP_NOSIZE,
-            SWP_NOZORDER, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WM_NCLBUTTONDOWN, WNDCLASSEXW,
-        },
-    },
-};
-
 use crate::{
     dpi::{PhysicalPosition, PhysicalSize, Position, Size},
     error::{ExternalError, NotSupportedError, OsError as RootOsError},
     icon::Icon,
+    platform::windows::HINSTANCE,
     platform_impl::platform::{
+        bindings::{self as wb, HWND, S_OK},
         dark_mode::try_theme,
         definitions::{
             CLSID_TaskbarList, IID_ITaskbarList, IID_ITaskbarList2, ITaskbarList, ITaskbarList2,
@@ -108,7 +69,7 @@ impl Window {
     pub fn set_title(&self, text: &str) {
         let wide_text = util::encode_wide(text);
         unsafe {
-            SetWindowTextW(self.hwnd(), wide_text.as_ptr());
+            wb::SetWindowTextW(self.hwnd(), wide_text.as_ptr());
         }
     }
 
@@ -128,13 +89,13 @@ impl Window {
 
     #[inline]
     pub fn is_visible(&self) -> Option<bool> {
-        Some(unsafe { IsWindowVisible(self.window.0) == 1 })
+        Some(unsafe { wb::IsWindowVisible(self.window.0) == 1 })
     }
 
     #[inline]
     pub fn request_redraw(&self) {
         unsafe {
-            RedrawWindow(self.hwnd(), ptr::null(), 0, RDW_INTERNALPAINT);
+            wb::RedrawWindow(self.hwnd(), ptr::null(), 0, wb::RDW_INTERNALPAINT);
         }
     }
 
@@ -147,8 +108,8 @@ impl Window {
 
     #[inline]
     pub fn inner_position(&self) -> Result<PhysicalPosition<i32>, NotSupportedError> {
-        let mut position: POINT = unsafe { mem::zeroed() };
-        if unsafe { ClientToScreen(self.hwnd(), &mut position) } == false.into() {
+        let mut position = unsafe { mem::zeroed() };
+        if unsafe { wb::ClientToScreen(self.hwnd(), &mut position) } == false.into() {
             panic!("Unexpected ClientToScreen failure: please report this error to https://github.com/rust-windowing/winit")
         }
         Ok(PhysicalPosition::new(position.x, position.y))
@@ -168,23 +129,23 @@ impl Window {
         });
 
         unsafe {
-            SetWindowPos(
+            wb::SetWindowPos(
                 self.hwnd(),
                 0,
                 x,
                 y,
                 0,
                 0,
-                SWP_ASYNCWINDOWPOS | SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE,
+                wb::SWP_ASYNCWINDOWPOS | wb::SWP_NOZORDER | wb::SWP_NOSIZE | wb::SWP_NOACTIVATE,
             );
-            InvalidateRgn(self.hwnd(), 0, false.into());
+            wb::InvalidateRgn(self.hwnd(), 0, false.into());
         }
     }
 
     #[inline]
     pub fn inner_size(&self) -> PhysicalSize<u32> {
-        let mut rect: RECT = unsafe { mem::zeroed() };
-        if unsafe { GetClientRect(self.hwnd(), &mut rect) } == false.into() {
+        let mut rect = unsafe { mem::zeroed() };
+        if unsafe { wb::GetClientRect(self.hwnd(), &mut rect) } == false.into() {
             panic!("Unexpected GetClientRect failure: please report this error to https://github.com/rust-windowing/winit")
         }
         PhysicalSize::new(
@@ -313,7 +274,7 @@ impl Window {
 
     #[inline]
     pub fn hinstance(&self) -> HINSTANCE {
-        unsafe { super::get_window_long(self.hwnd(), GWLP_HINSTANCE) }
+        unsafe { super::get_window_long(self.hwnd(), wb::GWLP_HINSTANCE) }
     }
 
     #[inline]
@@ -333,8 +294,8 @@ impl Window {
     pub fn set_cursor_icon(&self, cursor: CursorIcon) {
         self.window_state_lock().mouse.cursor = cursor;
         self.thread_executor.execute_in_thread(move || unsafe {
-            let cursor = LoadCursorW(0, util::to_windows_cursor(cursor));
-            SetCursor(cursor);
+            let cursor = wb::LoadCursorW(0, util::to_windows_cursor(cursor));
+            wb::SetCursor(cursor);
         });
     }
 
@@ -394,12 +355,12 @@ impl Window {
         let scale_factor = self.scale_factor();
         let (x, y) = position.to_physical::<i32>(scale_factor).into();
 
-        let mut point = POINT { x, y };
+        let mut point = wb::POINT { x, y };
         unsafe {
-            if ClientToScreen(self.hwnd(), &mut point) == false.into() {
+            if wb::ClientToScreen(self.hwnd(), &mut point) == false.into() {
                 return Err(ExternalError::Os(os_error!(io::Error::last_os_error())));
             }
-            if SetCursorPos(point.x, point.y) == false.into() {
+            if wb::SetCursorPos(point.x, point.y) == false.into() {
                 return Err(ExternalError::Os(os_error!(io::Error::last_os_error())));
             }
         }
@@ -411,22 +372,22 @@ impl Window {
         unsafe {
             let points = {
                 let mut pos = mem::zeroed();
-                GetCursorPos(&mut pos);
+                wb::GetCursorPos(&mut pos);
                 pos
             };
-            let points = POINTS {
+            let points = wb::POINTS {
                 x: points.x as i16,
                 y: points.y as i16,
             };
-            ReleaseCapture();
+            wb::ReleaseCapture();
 
             self.window_state_lock().dragging = true;
 
-            PostMessageW(
+            wb::PostMessageW(
                 self.hwnd(),
-                WM_NCLBUTTONDOWN,
-                HTCAPTION as WPARAM,
-                &points as *const _ as LPARAM,
+                wb::WM_NCLBUTTONDOWN,
+                wb::HTCAPTION as wb::WPARAM,
+                &points as *const _ as wb::LPARAM,
             );
         }
 
@@ -527,37 +488,37 @@ impl Window {
                     let monitor_info = monitor::get_monitor_info(monitor.hmonitor()).unwrap();
 
                     let res = unsafe {
-                        ChangeDisplaySettingsExW(
+                        wb::ChangeDisplaySettingsExW(
                             monitor_info.szDevice.as_ptr(),
                             &*video_mode.native_video_mode,
                             0,
-                            CDS_FULLSCREEN,
+                            wb::CDS_FULLSCREEN,
                             ptr::null(),
                         )
                     };
 
-                    debug_assert!(res != DISP_CHANGE_BADFLAGS);
-                    debug_assert!(res != DISP_CHANGE_BADMODE);
-                    debug_assert!(res != DISP_CHANGE_BADPARAM);
-                    debug_assert!(res != DISP_CHANGE_FAILED);
-                    assert_eq!(res, DISP_CHANGE_SUCCESSFUL);
+                    debug_assert!(res != wb::DISP_CHANGE_BADFLAGS);
+                    debug_assert!(res != wb::DISP_CHANGE_BADMODE);
+                    debug_assert!(res != wb::DISP_CHANGE_BADPARAM);
+                    debug_assert!(res != wb::DISP_CHANGE_FAILED);
+                    assert_eq!(res, wb::DISP_CHANGE_SUCCESSFUL);
                 }
                 (Some(Fullscreen::Exclusive(_)), _) => {
                     let res = unsafe {
-                        ChangeDisplaySettingsExW(
+                        wb::ChangeDisplaySettingsExW(
                             ptr::null(),
                             ptr::null(),
                             0,
-                            CDS_FULLSCREEN,
+                            wb::CDS_FULLSCREEN,
                             ptr::null(),
                         )
                     };
 
-                    debug_assert!(res != DISP_CHANGE_BADFLAGS);
-                    debug_assert!(res != DISP_CHANGE_BADMODE);
-                    debug_assert!(res != DISP_CHANGE_BADPARAM);
-                    debug_assert!(res != DISP_CHANGE_FAILED);
-                    assert_eq!(res, DISP_CHANGE_SUCCESSFUL);
+                    debug_assert!(res != wb::DISP_CHANGE_BADFLAGS);
+                    debug_assert!(res != wb::DISP_CHANGE_BADMODE);
+                    debug_assert!(res != wb::DISP_CHANGE_BADPARAM);
+                    debug_assert!(res != wb::DISP_CHANGE_FAILED);
+                    assert_eq!(res, wb::DISP_CHANGE_SUCCESSFUL);
                 }
                 _ => (),
             }
@@ -572,7 +533,7 @@ impl Window {
                 // fine, taking control back from the DWM and ensuring that the `SetWindowPos` call
                 // below goes through.
                 let mut msg = mem::zeroed();
-                PeekMessageW(&mut msg, 0, 0, 0, PM_NOREMOVE);
+                wb::PeekMessageW(&mut msg, 0, 0, 0, wb::PM_NOREMOVE);
             }
 
             // Update window style
@@ -601,7 +562,7 @@ impl Window {
                     // Save window bounds before entering fullscreen
                     let placement = unsafe {
                         let mut placement = mem::zeroed();
-                        GetWindowPlacement(window.0, &mut placement);
+                        wb::GetWindowPlacement(window.0, &mut placement);
                         placement
                     };
 
@@ -617,16 +578,16 @@ impl Window {
                     let size: (u32, u32) = monitor.size().into();
 
                     unsafe {
-                        SetWindowPos(
+                        wb::SetWindowPos(
                             window.0,
                             0,
                             position.0,
                             position.1,
                             size.0 as i32,
                             size.1 as i32,
-                            SWP_ASYNCWINDOWPOS | SWP_NOZORDER,
+                            wb::SWP_ASYNCWINDOWPOS | wb::SWP_NOZORDER,
                         );
-                        InvalidateRgn(window.0, 0, false.into());
+                        wb::InvalidateRgn(window.0, 0, false.into());
                     }
                 }
                 None => {
@@ -634,8 +595,8 @@ impl Window {
                     if let Some(SavedWindow { placement }) = window_state_lock.saved_window.take() {
                         drop(window_state_lock);
                         unsafe {
-                            SetWindowPlacement(window.0, &placement);
-                            InvalidateRgn(window.0, 0, false.into());
+                            wb::SetWindowPlacement(window.0, &placement);
+                            wb::InvalidateRgn(window.0, 0, false.into());
                         }
                     }
                 }
@@ -703,7 +664,7 @@ impl Window {
 
     #[inline]
     pub fn set_enable(&self, enabled: bool) {
-        unsafe { EnableWindow(self.hwnd(), enabled.into()) };
+        unsafe { wb::EnableWindow(self.hwnd(), enabled.into()) };
     }
 
     #[inline]
@@ -739,7 +700,7 @@ impl Window {
     #[inline]
     pub fn request_user_attention(&self, request_type: Option<UserAttentionType>) {
         let window = self.window.clone();
-        let active_window_handle = unsafe { GetActiveWindow() };
+        let active_window_handle = unsafe { wb::GetActiveWindow() };
         if window.0 == active_window_handle {
             return;
         }
@@ -748,19 +709,21 @@ impl Window {
             let _ = &window;
             let (flags, count) = request_type
                 .map(|ty| match ty {
-                    UserAttentionType::Critical => (FLASHW_ALL | FLASHW_TIMERNOFG, u32::MAX),
-                    UserAttentionType::Informational => (FLASHW_TRAY | FLASHW_TIMERNOFG, 0),
+                    UserAttentionType::Critical => {
+                        (wb::FLASHW_ALL | wb::FLASHW_TIMERNOFG, u32::MAX)
+                    }
+                    UserAttentionType::Informational => (wb::FLASHW_TRAY | wb::FLASHW_TIMERNOFG, 0),
                 })
-                .unwrap_or((FLASHW_STOP, 0));
+                .unwrap_or((wb::FLASHW_STOP, 0));
 
-            let flash_info = FLASHWINFO {
-                cbSize: mem::size_of::<FLASHWINFO>() as u32,
+            let flash_info = wb::FLASHWINFO {
+                cbSize: mem::size_of::<wb::FLASHWINFO>() as u32,
                 hwnd: window.0,
                 dwFlags: flags,
                 uCount: count,
                 dwTimeout: 0,
             };
-            FlashWindowEx(&flash_info);
+            wb::FlashWindowEx(&flash_info);
         });
     }
 
@@ -781,9 +744,9 @@ impl Window {
     }
 
     pub fn title(&self) -> String {
-        let len = unsafe { GetWindowTextLengthW(self.window.0) } + 1;
+        let len = unsafe { wb::GetWindowTextLengthW(self.window.0) } + 1;
         let mut buf = vec![0; len as usize];
-        unsafe { GetWindowTextW(self.window.0, buf.as_mut_ptr(), len) };
+        unsafe { wb::GetWindowTextW(self.window.0, buf.as_mut_ptr(), len) };
         util::decode_wide(&buf).to_string_lossy().to_string()
     }
 
@@ -813,7 +776,7 @@ impl Window {
 
         let is_visible = window_flags.contains(WindowFlags::VISIBLE);
         let is_minimized = util::is_minimized(self.hwnd());
-        let is_foreground = window.0 == unsafe { GetForegroundWindow() };
+        let is_foreground = window.0 == unsafe { wb::GetForegroundWindow() };
 
         if is_visible && !is_minimized && !is_foreground {
             unsafe { force_window_active(window.0) };
@@ -823,12 +786,12 @@ impl Window {
     #[inline]
     pub fn set_content_protected(&self, protected: bool) {
         unsafe {
-            SetWindowDisplayAffinity(
+            wb::SetWindowDisplayAffinity(
                 self.hwnd(),
                 if protected {
-                    WDA_EXCLUDEFROMCAPTURE
+                    wb::WDA_EXCLUDEFROMCAPTURE
                 } else {
-                    WDA_NONE
+                    wb::WDA_NONE
                 },
             )
         };
@@ -841,7 +804,7 @@ impl Drop for Window {
         unsafe {
             // The window must be destroyed from the same thread that created it, so we send a
             // custom message to be handled by our callback to do the actual work.
-            PostMessageW(self.hwnd(), DESTROY_MSG_ID.get(), 0, 0);
+            wb::PostMessageW(self.hwnd(), DESTROY_MSG_ID.get(), 0, 0);
         }
     }
 }
@@ -872,9 +835,9 @@ impl<'a, T: 'static> InitData<'a, T> {
     unsafe fn create_window(&self, window: HWND) -> Window {
         // Register for touch events if applicable
         {
-            let digitizer = GetSystemMetrics(SM_DIGITIZER) as u32;
-            if digitizer & NID_READY != 0 {
-                RegisterTouchWindow(window, TWF_WANTPALM);
+            let digitizer = wb::GetSystemMetrics(wb::SM_DIGITIZER) as u32;
+            if digitizer & wb::NID_READY != 0 {
+                wb::RegisterTouchWindow(window, wb::TWF_WANTPALM);
             }
         }
 
@@ -913,12 +876,12 @@ impl<'a, T: 'static> InitData<'a, T> {
 
     unsafe fn create_window_data(&self, win: &Window) -> event_loop::WindowData<T> {
         let file_drop_handler = if self.pl_attribs.drag_and_drop {
-            let ole_init_result = OleInitialize(ptr::null_mut());
+            let ole_init_result = wb::OleInitialize(ptr::null_mut());
             // It is ok if the initialize result is `S_FALSE` because it might happen that
             // multiple windows are created on the same thread.
-            if ole_init_result == OLE_E_WRONGCOMPOBJ {
+            if ole_init_result == wb::OLE_E_WRONGCOMPOBJ {
                 panic!("OleInitialize failed! Result was: `OLE_E_WRONGCOMPOBJ`");
-            } else if ole_init_result == RPC_E_CHANGED_MODE {
+            } else if ole_init_result == wb::RPC_E_CHANGED_MODE {
                 panic!(
                     "OleInitialize failed! Result was: `RPC_E_CHANGED_MODE`. \
                     Make sure other crates are not using multithreaded COM library \
@@ -939,7 +902,10 @@ impl<'a, T: 'static> InitData<'a, T> {
             let handler_interface_ptr =
                 &mut (*file_drop_handler.data).interface as *mut _ as *mut c_void;
 
-            assert_eq!(RegisterDragDrop(win.window.0, handler_interface_ptr), S_OK);
+            assert_eq!(
+                wb::RegisterDragDrop(win.window.0, handler_interface_ptr),
+                S_OK
+            );
             Some(file_drop_handler)
         } else {
             None
@@ -979,22 +945,22 @@ impl<'a, T: 'static> InitData<'a, T> {
         // making the window transparent
         if self.attributes.transparent && !self.pl_attribs.no_redirection_bitmap {
             // Empty region for the blur effect, so the window is fully transparent
-            let region = CreateRectRgn(0, 0, -1, -1);
+            let region = wb::CreateRectRgn(0, 0, -1, -1);
 
-            let bb = DWM_BLURBEHIND {
-                dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
+            let bb = wb::DWM_BLURBEHIND {
+                dwFlags: wb::DWM_BB_ENABLE | wb::DWM_BB_BLURREGION,
                 fEnable: true.into(),
                 hRgnBlur: region,
                 fTransitionOnMaximized: false.into(),
             };
-            let hr = DwmEnableBlurBehindWindow(win.hwnd(), &bb);
+            let hr = wb::DwmEnableBlurBehindWindow(win.hwnd(), &bb);
             if hr < 0 {
                 warn!(
                     "Setting transparent window is failed. HRESULT Code: 0x{:X}",
                     hr
                 );
             }
-            DeleteObject(region);
+            wb::DeleteObject(region);
         }
 
         win.set_skip_taskbar(self.pl_attribs.skip_taskbar);
@@ -1117,15 +1083,15 @@ where
     };
 
     let (style, ex_style) = window_flags.to_window_styles();
-    let handle = CreateWindowExW(
+    let handle = wb::CreateWindowExW(
         ex_style,
         class_name.as_ptr(),
         title.as_ptr(),
         style,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
+        wb::CW_USEDEFAULT,
+        wb::CW_USEDEFAULT,
+        wb::CW_USEDEFAULT,
+        wb::CW_USEDEFAULT,
         parent.unwrap_or(0),
         pl_attribs.menu.unwrap_or(0),
         util::get_instance_handle(),
@@ -1149,9 +1115,9 @@ where
 unsafe fn register_window_class<T: 'static>() -> Vec<u16> {
     let class_name = util::encode_wide("Window Class");
 
-    let class = WNDCLASSEXW {
-        cbSize: mem::size_of::<WNDCLASSEXW>() as u32,
-        style: CS_HREDRAW | CS_VREDRAW,
+    let class = wb::WNDCLASSEXW {
+        cbSize: mem::size_of::<wb::WNDCLASSEXW>() as u32,
+        style: wb::CS_HREDRAW | wb::CS_VREDRAW,
         lpfnWndProc: Some(super::event_loop::public_window_callback::<T>),
         cbClsExtra: 0,
         cbWndExtra: 0,
@@ -1168,7 +1134,7 @@ unsafe fn register_window_class<T: 'static>() -> Vec<u16> {
     //  an error, and because errors here are detected during CreateWindowEx anyway.
     // Also since there is no weird element in the struct, there is no reason for this
     //  call to fail.
-    RegisterClassExW(&class);
+    wb::RegisterClassExW(&class);
 
     class_name
 }
@@ -1176,14 +1142,14 @@ unsafe fn register_window_class<T: 'static>() -> Vec<u16> {
 struct ComInitialized(*mut ());
 impl Drop for ComInitialized {
     fn drop(&mut self) {
-        unsafe { CoUninitialize() };
+        unsafe { wb::CoUninitialize() };
     }
 }
 
 thread_local! {
     static COM_INITIALIZED: ComInitialized = {
         unsafe {
-            CoInitializeEx(ptr::null(), COINIT_APARTMENTTHREADED);
+            wb::CoInitializeEx(ptr::null(), wb::COINIT_APARTMENTTHREADED);
             ComInitialized(ptr::null_mut())
         }
     };
@@ -1211,10 +1177,10 @@ unsafe fn taskbar_mark_fullscreen(handle: HWND, fullscreen: bool) {
         let mut task_bar_list2 = task_bar_list2_ptr.get();
 
         if task_bar_list2.is_null() {
-            let hr = CoCreateInstance(
+            let hr = wb::CoCreateInstance(
                 &CLSID_TaskbarList,
                 ptr::null_mut(),
-                CLSCTX_ALL,
+                wb::CLSCTX_ALL,
                 &IID_ITaskbarList2,
                 &mut task_bar_list2 as *mut _ as *mut _,
             );
@@ -1243,10 +1209,10 @@ pub(crate) unsafe fn set_skip_taskbar(hwnd: HWND, skip: bool) {
         let mut task_bar_list = task_bar_list_ptr.get();
 
         if task_bar_list.is_null() {
-            let hr = CoCreateInstance(
+            let hr = wb::CoCreateInstance(
                 &CLSID_TaskbarList,
                 ptr::null_mut(),
-                CLSCTX_ALL,
+                wb::CLSCTX_ALL,
                 &IID_ITaskbarList,
                 &mut task_bar_list as *mut _ as *mut _,
             );
@@ -1279,28 +1245,28 @@ unsafe fn force_window_active(handle: HWND) {
     // This is a little hack which can "steal" the foreground window permission
     // We only call this function in the window creation, so it should be fine.
     // See : https://stackoverflow.com/questions/10740346/setforegroundwindow-only-working-while-visual-studio-is-open
-    let alt_sc = MapVirtualKeyW(VK_MENU as u32, MAPVK_VK_TO_VSC);
+    let alt_sc = wb::MapVirtualKeyW(wb::VK_MENU as u32, wb::MAPVK_VK_TO_VSC);
 
     let inputs = [
-        INPUT {
-            r#type: INPUT_KEYBOARD,
-            Anonymous: INPUT_0 {
-                ki: KEYBDINPUT {
-                    wVk: VK_LMENU,
+        wb::INPUT {
+            r#type: wb::INPUT_KEYBOARD,
+            Anonymous: wb::INPUT_0 {
+                ki: wb::KEYBDINPUT {
+                    wVk: wb::VK_LMENU,
                     wScan: alt_sc as u16,
-                    dwFlags: KEYEVENTF_EXTENDEDKEY,
+                    dwFlags: wb::KEYEVENTF_EXTENDEDKEY,
                     dwExtraInfo: 0,
                     time: 0,
                 },
             },
         },
-        INPUT {
-            r#type: INPUT_KEYBOARD,
-            Anonymous: INPUT_0 {
-                ki: KEYBDINPUT {
-                    wVk: VK_LMENU,
+        wb::INPUT {
+            r#type: wb::INPUT_KEYBOARD,
+            Anonymous: wb::INPUT_0 {
+                ki: wb::KEYBDINPUT {
+                    wVk: wb::VK_LMENU,
                     wScan: alt_sc as u16,
-                    dwFlags: KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP,
+                    dwFlags: wb::KEYEVENTF_EXTENDEDKEY | wb::KEYEVENTF_KEYUP,
                     dwExtraInfo: 0,
                     time: 0,
                 },
@@ -1309,11 +1275,11 @@ unsafe fn force_window_active(handle: HWND) {
     ];
 
     // Simulate a key press and release
-    SendInput(
+    wb::SendInput(
         inputs.len() as u32,
         inputs.as_ptr(),
-        mem::size_of::<INPUT>() as i32,
+        mem::size_of::<wb::INPUT>() as i32,
     );
 
-    SetForegroundWindow(handle);
+    wb::SetForegroundWindow(handle);
 }

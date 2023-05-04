@@ -9,29 +9,17 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use once_cell::sync::Lazy;
-use windows_sys::{
-    core::{HRESULT, PCWSTR},
-    Win32::{
-        Foundation::{BOOL, HINSTANCE, HWND, RECT},
-        Graphics::Gdi::{ClientToScreen, HMONITOR},
-        System::{
-            LibraryLoader::{GetProcAddress, LoadLibraryA},
-            SystemServices::IMAGE_DOS_HEADER,
-        },
-        UI::{
-            HiDpi::{DPI_AWARENESS_CONTEXT, MONITOR_DPI_TYPE, PROCESS_DPI_AWARENESS},
-            Input::KeyboardAndMouse::GetActiveWindow,
-            WindowsAndMessaging::{
-                ClipCursor, GetClientRect, GetClipCursor, GetSystemMetrics, GetWindowPlacement,
-                GetWindowRect, IsIconic, ShowCursor, IDC_APPSTARTING, IDC_ARROW, IDC_CROSS,
-                IDC_HAND, IDC_HELP, IDC_IBEAM, IDC_NO, IDC_SIZEALL, IDC_SIZENESW, IDC_SIZENS,
-                IDC_SIZENWSE, IDC_SIZEWE, IDC_WAIT, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
-                SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SW_MAXIMIZE, WINDOWPLACEMENT,
-            },
-        },
-    },
+use crate::platform::windows::HINSTANCE;
+use crate::platform_impl::platform::bindings::{
+    ClientToScreen, ClipCursor, GetActiveWindow, GetClientRect, GetClipCursor, GetProcAddress,
+    GetSystemMetrics, GetWindowPlacement, GetWindowRect, IsIconic, LoadLibraryA, ShowCursor, BOOL,
+    DPI_AWARENESS_CONTEXT, HMONITOR, HRESULT, HWND, IDC_APPSTARTING, IDC_ARROW, IDC_CROSS,
+    IDC_HAND, IDC_HELP, IDC_IBEAM, IDC_NO, IDC_SIZEALL, IDC_SIZENESW, IDC_SIZENS, IDC_SIZENWSE,
+    IDC_SIZEWE, IDC_WAIT, IMAGE_DOS_HEADER, MONITOR_DPI_TYPE, PCWSTR, PROCESS_DPI_AWARENESS, RECT,
+    SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SW_MAXIMIZE,
+    WINDOWPLACEMENT,
 };
+use once_cell::sync::Lazy;
 
 use crate::window::CursorIcon;
 

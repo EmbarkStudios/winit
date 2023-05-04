@@ -1,18 +1,11 @@
 use std::{fmt, io, mem, path::Path, sync::Arc};
 
-use windows_sys::{
-    core::PCWSTR,
-    Win32::{
-        Foundation::HWND,
-        UI::WindowsAndMessaging::{
-            CreateIcon, DestroyIcon, LoadImageW, SendMessageW, HICON, ICON_BIG, ICON_SMALL,
-            IMAGE_ICON, LR_DEFAULTSIZE, LR_LOADFROMFILE, WM_SETICON,
-        },
-    },
-};
-
 use crate::dpi::PhysicalSize;
 use crate::icon::*;
+use crate::platform_impl::platform::bindings::{
+    CreateIcon, DestroyIcon, LoadImageW, SendMessageW, HICON, HWND, ICON_BIG, ICON_SMALL,
+    IMAGE_ICON, LR_DEFAULTSIZE, LR_LOADFROMFILE, PCWSTR, WM_SETICON,
+};
 
 use super::util;
 

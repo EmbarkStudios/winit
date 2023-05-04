@@ -3,27 +3,23 @@ use std::{
     ptr,
 };
 
-use windows_sys::Win32::{
-    Devices::HumanInterfaceDevice::{
-        HID_USAGE_GENERIC_KEYBOARD, HID_USAGE_GENERIC_MOUSE, HID_USAGE_PAGE_GENERIC,
-    },
-    Foundation::{HANDLE, HWND},
-    UI::{
-        Input::{
+use crate::{
+    event::ElementState,
+    event_loop::DeviceEventFilter,
+    platform_impl::platform::{
+        bindings::{
             GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList,
-            RegisterRawInputDevices, HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICELIST,
+            RegisterRawInputDevices, HANDLE, HID_USAGE_GENERIC_KEYBOARD, HID_USAGE_GENERIC_MOUSE,
+            HID_USAGE_PAGE_GENERIC, HRAWINPUT, HWND, RAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICELIST,
             RAWINPUTHEADER, RIDEV_DEVNOTIFY, RIDEV_INPUTSINK, RIDEV_REMOVE, RIDI_DEVICEINFO,
             RIDI_DEVICENAME, RID_DEVICE_INFO, RID_DEVICE_INFO_HID, RID_DEVICE_INFO_KEYBOARD,
             RID_DEVICE_INFO_MOUSE, RID_INPUT, RIM_TYPEHID, RIM_TYPEKEYBOARD, RIM_TYPEMOUSE,
-        },
-        WindowsAndMessaging::{
             RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP, RI_MOUSE_MIDDLE_BUTTON_DOWN,
             RI_MOUSE_MIDDLE_BUTTON_UP, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP,
         },
+        util,
     },
 };
-
-use crate::{event::ElementState, event_loop::DeviceEventFilter, platform_impl::platform::util};
 
 #[allow(dead_code)]
 pub fn get_raw_input_device_list() -> Option<Vec<RAWINPUTDEVICELIST>> {

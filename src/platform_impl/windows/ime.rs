@@ -5,21 +5,16 @@ use std::{
     ptr::null_mut,
 };
 
-use windows_sys::Win32::{
-    Foundation::POINT,
-    Globalization::HIMC,
-    UI::{
-        Input::Ime::{
-            ImmAssociateContextEx, ImmGetCompositionStringW, ImmGetContext, ImmReleaseContext,
-            ImmSetCandidateWindow, ATTR_TARGET_CONVERTED, ATTR_TARGET_NOTCONVERTED, CANDIDATEFORM,
-            CFS_EXCLUDE, GCS_COMPATTR, GCS_COMPSTR, GCS_CURSORPOS, GCS_RESULTSTR, IACE_CHILDREN,
-            IACE_DEFAULT,
-        },
-        WindowsAndMessaging::{GetSystemMetrics, SM_IMMENABLED},
+use crate::{
+    dpi::Position,
+    platform::windows::HWND,
+    platform_impl::platform::bindings::{
+        GetSystemMetrics, ImmAssociateContextEx, ImmGetCompositionStringW, ImmGetContext,
+        ImmReleaseContext, ImmSetCandidateWindow, ATTR_TARGET_CONVERTED, ATTR_TARGET_NOTCONVERTED,
+        CANDIDATEFORM, CFS_EXCLUDE, GCS_COMPATTR, GCS_COMPSTR, GCS_CURSORPOS, GCS_RESULTSTR, HIMC,
+        IACE_CHILDREN, IACE_DEFAULT, POINT, SM_IMMENABLED,
     },
 };
-
-use crate::{dpi::Position, platform::windows::HWND};
 
 pub struct ImeContext {
     hwnd: HWND,

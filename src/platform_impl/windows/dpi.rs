@@ -2,23 +2,16 @@
 
 use std::sync::Once;
 
-use windows_sys::Win32::{
-    Foundation::{HWND, S_OK},
-    Graphics::Gdi::{
-        GetDC, GetDeviceCaps, MonitorFromWindow, HMONITOR, LOGPIXELSX, MONITOR_DEFAULTTONEAREST,
+use crate::platform_impl::platform::{
+    bindings::{
+        GetDC, GetDeviceCaps, IsProcessDPIAware, MonitorFromWindow, DPI_AWARENESS_CONTEXT,
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE, HMONITOR, HWND, LOGPIXELSX, MDT_EFFECTIVE_DPI,
+        MONITOR_DEFAULTTONEAREST, PROCESS_PER_MONITOR_DPI_AWARE, S_OK,
     },
-    UI::{
-        HiDpi::{
-            DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE, MDT_EFFECTIVE_DPI,
-            PROCESS_PER_MONITOR_DPI_AWARE,
-        },
-        WindowsAndMessaging::IsProcessDPIAware,
+    util::{
+        ENABLE_NON_CLIENT_DPI_SCALING, GET_DPI_FOR_MONITOR, GET_DPI_FOR_WINDOW,
+        SET_PROCESS_DPI_AWARE, SET_PROCESS_DPI_AWARENESS, SET_PROCESS_DPI_AWARENESS_CONTEXT,
     },
-};
-
-use crate::platform_impl::platform::util::{
-    ENABLE_NON_CLIENT_DPI_SCALING, GET_DPI_FOR_MONITOR, GET_DPI_FOR_WINDOW, SET_PROCESS_DPI_AWARE,
-    SET_PROCESS_DPI_AWARENESS, SET_PROCESS_DPI_AWARENESS_CONTEXT,
 };
 
 const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: DPI_AWARENESS_CONTEXT = -4;

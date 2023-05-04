@@ -7,16 +7,12 @@ use std::{
     time::Instant,
 };
 
-use windows_sys::Win32::{
-    Foundation::HWND,
-    Graphics::Gdi::{RedrawWindow, RDW_INTERNALPAINT},
-};
-
 use crate::{
     dpi::PhysicalSize,
     event::{Event, StartCause, WindowEvent},
     event_loop::ControlFlow,
     platform_impl::platform::{
+        bindings::{RedrawWindow, HWND, RDW_INTERNALPAINT},
         event_loop::{WindowData, GWL_USERDATA},
         get_window_long,
     },

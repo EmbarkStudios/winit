@@ -2,26 +2,15 @@
 /// which is inspired by the solution in https://github.com/ysc3839/win32-darkmode
 use std::{ffi::c_void, ptr};
 
-use once_cell::sync::Lazy;
-use windows_sys::{
-    core::PCSTR,
-    Win32::{
-        Foundation::{BOOL, HWND, NTSTATUS, S_OK},
-        System::{
-            LibraryLoader::{GetProcAddress, LoadLibraryA},
-            SystemInformation::OSVERSIONINFOW,
-        },
-        UI::{
-            Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTA},
-            Controls::SetWindowTheme,
-            WindowsAndMessaging::{SystemParametersInfoA, SPI_GETHIGHCONTRAST},
-        },
-    },
-};
-
 use crate::window::Theme;
+use once_cell::sync::Lazy;
 
 use super::util;
+
+use crate::platform_impl::platform::bindings::{
+    GetProcAddress, LoadLibraryA, SetWindowTheme, SystemParametersInfoA, BOOL, HCF_HIGHCONTRASTON,
+    HIGHCONTRASTA, HWND, NTSTATUS, OSVERSIONINFOW, PCSTR, SPI_GETHIGHCONTRAST, S_OK,
+};
 
 static WIN10_BUILD_VERSION: Lazy<Option<u32>> = Lazy::new(|| {
     type RtlGetVersion = unsafe extern "system" fn(*mut OSVERSIONINFOW) -> NTSTATUS;

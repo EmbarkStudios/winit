@@ -4,21 +4,17 @@ use std::{
     io, mem, ptr,
 };
 
-use windows_sys::Win32::{
-    Foundation::{BOOL, HWND, LPARAM, POINT, RECT},
-    Graphics::Gdi::{
-        EnumDisplayMonitors, EnumDisplaySettingsExW, GetMonitorInfoW, MonitorFromPoint,
-        MonitorFromWindow, DEVMODEW, DM_BITSPERPEL, DM_DISPLAYFREQUENCY, DM_PELSHEIGHT,
-        DM_PELSWIDTH, ENUM_CURRENT_SETTINGS, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW,
-        MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY,
-    },
-};
-
 use super::util::decode_wide;
 use crate::{
     dpi::{PhysicalPosition, PhysicalSize},
     monitor::VideoMode as RootVideoMode,
     platform_impl::platform::{
+        bindings::{
+            EnumDisplayMonitors, EnumDisplaySettingsExW, GetMonitorInfoW, MonitorFromPoint,
+            MonitorFromWindow, BOOL, DEVMODEW, DM_BITSPERPEL, DM_DISPLAYFREQUENCY, DM_PELSHEIGHT,
+            DM_PELSWIDTH, ENUM_CURRENT_SETTINGS, HDC, HMONITOR, HWND, LPARAM, MONITORINFO,
+            MONITORINFOEXW, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY, POINT, RECT,
+        },
         dpi::{dpi_to_scale_factor, get_monitor_dpi},
         util::has_flag,
         window::Window,
