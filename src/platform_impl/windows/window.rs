@@ -1249,7 +1249,7 @@ unsafe fn force_window_active(handle: HWND) {
 
     let inputs = [
         wb::INPUT {
-            r#type: wb::INPUT_KEYBOARD,
+            type_: wb::INPUT_KEYBOARD,
             Anonymous: wb::INPUT_0 {
                 ki: wb::KEYBDINPUT {
                     wVk: wb::VK_LMENU,
@@ -1261,7 +1261,7 @@ unsafe fn force_window_active(handle: HWND) {
             },
         },
         wb::INPUT {
-            r#type: wb::INPUT_KEYBOARD,
+            type_: wb::INPUT_KEYBOARD,
             Anonymous: wb::INPUT_0 {
                 ki: wb::KEYBDINPUT {
                     wVk: wb::VK_LMENU,

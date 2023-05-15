@@ -23,41 +23,14 @@ pub struct IDataObjectVtbl {
         pformatetcIn: *const FORMATETC,
         pmedium: *mut STGMEDIUM,
     ) -> HRESULT,
-    pub GetDataHere: unsafe extern "system" fn(
-        This: *mut IDataObject,
-        pformatetc: *const FORMATETC,
-        pmedium: *mut STGMEDIUM,
-    ) -> HRESULT,
-    QueryGetData:
-        unsafe extern "system" fn(This: *mut IDataObject, pformatetc: *const FORMATETC) -> HRESULT,
-    pub GetCanonicalFormatEtc: unsafe extern "system" fn(
-        This: *mut IDataObject,
-        pformatetcIn: *const FORMATETC,
-        pformatetcOut: *mut FORMATETC,
-    ) -> HRESULT,
-    pub SetData: unsafe extern "system" fn(
-        This: *mut IDataObject,
-        pformatetc: *const FORMATETC,
-        pformatetcOut: *const FORMATETC,
-        fRelease: BOOL,
-    ) -> HRESULT,
-    pub EnumFormatEtc: unsafe extern "system" fn(
-        This: *mut IDataObject,
-        dwDirection: u32,
-        ppenumFormatEtc: *mut *mut IEnumFORMATETC,
-    ) -> HRESULT,
-    pub DAdvise: unsafe extern "system" fn(
-        This: *mut IDataObject,
-        pformatetc: *const FORMATETC,
-        advf: u32,
-        pAdvSInk: *const IAdviseSink,
-        pdwConnection: *mut u32,
-    ) -> HRESULT,
-    pub DUnadvise: unsafe extern "system" fn(This: *mut IDataObject, dwConnection: u32) -> HRESULT,
-    pub EnumDAdvise: unsafe extern "system" fn(
-        This: *mut IDataObject,
-        ppenumAdvise: *const *const IEnumSTATDATA,
-    ) -> HRESULT,
+    GetDataHere: usize,
+    QueryGetData: usize,
+    GetCanonicalFormatEtc: usize,
+    SetData: usize,
+    EnumFormatEtc: usize,
+    DAdvise: usize,
+    DUnadvise: usize,
+    EnumDAdvise: usize,
 }
 
 #[repr(C)]
