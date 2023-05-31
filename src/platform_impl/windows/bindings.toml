@@ -12,6 +12,8 @@ binds = [
     "CoInitializeEx",
     "COINIT_APARTMENTTHREADED",
     "CoUninitialize",
+    # CLSID_TaskbarList
+    "TaskbarList",
     # Ole
     "OLE_E_WRONGCOMPOBJ",
     "RPC_E_CHANGED_MODE",
@@ -540,3 +542,13 @@ binds = [
     "TIMECAPS",
     "TIMERR_NOERROR",
 ]
+
+[interfaces]
+IDataObject = ["GetData", "+vtable"]
+IDropTarget = ["DragEnter", "DragLeave", "DragOver", "Drop"]
+ITaskbarList = ["AddTab", "DeleteTab", "HrInit", "+IID", "+vtable"]
+ITaskbarList2 = ["MarkFullscreenWindow", "+IID", "+vtable"]
+
+[bind-mode]
+mode = "minwin"
+config.com-style = "None"

@@ -42,9 +42,9 @@
     "kernel32.dll" "system" fn LoadLibraryA(lpLibFileName : PCSTR) -> HMODULE
 );
 ::windows_targets::link!(
-    "ole32.dll" "system" fn CoCreateInstance(rclsid : * const GUID, pUnkOuter : IUnknown,
-    dwClsContext : CLSCTX, riid : * const GUID, ppv : * mut * mut ::core::ffi::c_void) ->
-    HRESULT
+    "ole32.dll" "system" fn CoCreateInstance(rclsid : * const GUID, pUnkOuter : * mut
+    ::core::ffi::c_void, dwClsContext : CLSCTX, riid : * const GUID, ppv : * mut * mut
+    ::core::ffi::c_void) -> HRESULT
 );
 ::windows_targets::link!(
     "ole32.dll" "system" fn CoInitializeEx(pvReserved : * const ::core::ffi::c_void,
@@ -56,8 +56,8 @@
     HRESULT
 );
 ::windows_targets::link!(
-    "ole32.dll" "system" fn RegisterDragDrop(hwnd : HWND, pDropTarget : IDropTarget) ->
-    HRESULT
+    "ole32.dll" "system" fn RegisterDragDrop(hwnd : HWND, pDropTarget : * mut
+    ::core::ffi::c_void) -> HRESULT
 );
 ::windows_targets::link!("ole32.dll" "system" fn RevokeDragDrop(hwnd : HWND) -> HRESULT);
 ::windows_targets::link!("shell32.dll" "system" fn DragFinish(hDrop : HDROP) -> ());
@@ -726,8 +726,58 @@ pub type HWND = isize;
 pub const HWND_NOTOPMOST: HWND = -2;
 pub const HWND_TOPMOST: HWND = -1;
 pub const HWND_BOTTOM: HWND = 1;
-pub type IDataObject = *mut ::core::ffi::c_void;
-pub type IDropTarget = *mut ::core::ffi::c_void;
+#[repr(C)]
+pub struct IDataObject_Vtbl {
+    pub base__: IUnknown_Vtbl,
+    pub GetData: unsafe extern "system" fn(
+        this: *mut ::core::ffi::c_void,
+        pformatetcIn: *const FORMATETC,
+        pmedium: *mut STGMEDIUM,
+    ) -> HRESULT,
+    GetDataHere: usize,
+    QueryGetData: usize,
+    GetCanonicalFormatEtc: usize,
+    SetData: usize,
+    EnumFormatEtc: usize,
+    DAdvise: usize,
+    DUnadvise: usize,
+    EnumDAdvise: usize,
+}
+#[repr(transparent)]
+pub struct IDataObject(pub ::core::ptr::NonNull<::core::ffi::c_void>);
+impl IDataObject {
+    #[inline]
+    pub unsafe fn vtable(&self) -> &IDataObject_Vtbl {
+        &(*self.0.as_ptr().cast::<IDataObject_Vtbl>())
+    }
+}
+#[repr(C)]
+pub struct IDropTarget_Vtbl {
+    pub base__: IUnknown_Vtbl,
+    pub DragEnter: unsafe extern "system" fn(
+        this: *mut ::core::ffi::c_void,
+        pDataObj: *mut ::core::ffi::c_void,
+        grfKeyState: MODIFIERKEYS_FLAGS,
+        pt: POINTL,
+        pdwEffect: *mut DROPEFFECT,
+    ) -> HRESULT,
+    pub DragOver: unsafe extern "system" fn(
+        this: *mut ::core::ffi::c_void,
+        grfKeyState: MODIFIERKEYS_FLAGS,
+        pt: POINTL,
+        pdwEffect: *mut DROPEFFECT,
+    ) -> HRESULT,
+    pub DragLeave: unsafe extern "system" fn(this: *mut ::core::ffi::c_void) -> HRESULT,
+    pub Drop: unsafe extern "system" fn(
+        this: *mut ::core::ffi::c_void,
+        pDataObj: *mut ::core::ffi::c_void,
+        grfKeyState: MODIFIERKEYS_FLAGS,
+        pt: POINTL,
+        pdwEffect: *mut DROPEFFECT,
+    ) -> HRESULT,
+}
+#[repr(transparent)]
+pub struct IDropTarget(pub ::core::ptr::NonNull<::core::ffi::c_void>);
 #[repr(C, packed(2))]
 pub struct IMAGE_DOS_HEADER {
     pub e_magic: u16,
@@ -783,9 +833,68 @@ impl ::core::clone::Clone for INPUT_0 {
 }
 pub type INPUT_TYPE = u32;
 pub const INPUT_KEYBOARD: INPUT_TYPE = 1;
-pub type IStorage = *mut ::core::ffi::c_void;
-pub type IStream = *mut ::core::ffi::c_void;
-pub type IUnknown = *mut ::core::ffi::c_void;
+#[repr(transparent)]
+pub struct IStorage(::core::ptr::NonNull<::core::ffi::c_void>);
+#[repr(transparent)]
+pub struct IStream(::core::ptr::NonNull<::core::ffi::c_void>);
+#[repr(C)]
+pub struct ITaskbarList2_Vtbl {
+    pub base__: ITaskbarList_Vtbl,
+    pub MarkFullscreenWindow: unsafe extern "system" fn(
+        this: *mut ::core::ffi::c_void,
+        hwnd: HWND,
+        fFullscreen: BOOL,
+    ) -> HRESULT,
+}
+#[repr(transparent)]
+pub struct ITaskbarList2(pub ::core::ptr::NonNull<::core::ffi::c_void>);
+impl ITaskbarList2 {
+    #[inline]
+    pub unsafe fn vtable(&self) -> &ITaskbarList2_Vtbl {
+        &(*self.0.as_ptr().cast::<ITaskbarList2_Vtbl>())
+    }
+}
+pub const IID_ITaskbarList2: GUID = GUID::from_u128(
+    0x602d4995_b13a_429b_a66e_1935e44f4317,
+);
+#[repr(C)]
+pub struct ITaskbarList_Vtbl {
+    pub base__: IUnknown_Vtbl,
+    pub HrInit: unsafe extern "system" fn(this: *mut ::core::ffi::c_void) -> HRESULT,
+    pub AddTab: unsafe extern "system" fn(
+        this: *mut ::core::ffi::c_void,
+        hwnd: HWND,
+    ) -> HRESULT,
+    pub DeleteTab: unsafe extern "system" fn(
+        this: *mut ::core::ffi::c_void,
+        hwnd: HWND,
+    ) -> HRESULT,
+    ActivateTab: usize,
+    SetActiveAlt: usize,
+}
+#[repr(transparent)]
+pub struct ITaskbarList(pub ::core::ptr::NonNull<::core::ffi::c_void>);
+impl ITaskbarList {
+    #[inline]
+    pub unsafe fn vtable(&self) -> &ITaskbarList_Vtbl {
+        &(*self.0.as_ptr().cast::<ITaskbarList_Vtbl>())
+    }
+}
+pub const IID_ITaskbarList: GUID = GUID::from_u128(
+    0x56fdf342_fd6d_11d0_958a_006097c9a090,
+);
+#[repr(transparent)]
+pub struct IUnknown(::core::ptr::NonNull<::std::ffi::c_void>);
+#[repr(C)]
+pub struct IUnknown_Vtbl {
+    pub QueryInterface: unsafe extern "system" fn(
+        this: *mut std::ffi::c_void,
+        iid: *const GUID,
+        interface: *mut *const ::std::ffi::c_void,
+    ) -> HRESULT,
+    pub AddRef: unsafe extern "system" fn(this: *mut ::std::ffi::c_void) -> u32,
+    pub Release: unsafe extern "system" fn(this: *mut ::std::ffi::c_void) -> u32,
+}
 #[repr(C)]
 pub struct KEYBDINPUT {
     pub wVk: VIRTUAL_KEY,
@@ -822,6 +931,7 @@ pub struct MINMAXINFO {
     pub ptMinTrackSize: POINT,
     pub ptMaxTrackSize: POINT,
 }
+pub type MODIFIERKEYS_FLAGS = u32;
 pub type MONITORENUMPROC = ::core::option::Option<
     unsafe extern "system" fn(
         param0: HMONITOR,
@@ -1226,6 +1336,7 @@ pub type TRACKMOUSEEVENT_FLAGS = u32;
 pub const TME_LEAVE: TRACKMOUSEEVENT_FLAGS = 2;
 pub type TYMED = i32;
 pub const TYMED_HGLOBAL: TYMED = 1;
+pub const TaskbarList: GUID = GUID::from_u128(0x56fdf344_fd6d_11d0_958a_006097c9a090);
 pub type VIRTUAL_KEY = u16;
 pub const VK_BACK: VIRTUAL_KEY = 8;
 pub const VK_TAB: VIRTUAL_KEY = 9;

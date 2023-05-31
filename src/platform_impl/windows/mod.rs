@@ -156,7 +156,6 @@ unsafe fn set_window_long(
 mod util;
 mod bindings;
 mod dark_mode;
-mod definitions;
 mod dpi;
 mod drop_handler;
 mod event;

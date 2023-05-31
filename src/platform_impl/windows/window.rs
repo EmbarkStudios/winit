@@ -16,11 +16,11 @@ use crate::{
     icon::Icon,
     platform::windows::HINSTANCE,
     platform_impl::platform::{
-        bindings::{self as wb, HWND, S_OK},
-        dark_mode::try_theme,
-        definitions::{
-            CLSID_TaskbarList, IID_ITaskbarList, IID_ITaskbarList2, ITaskbarList, ITaskbarList2,
+        bindings::{
+            self as wb, IID_ITaskbarList, IID_ITaskbarList2, ITaskbarList, ITaskbarList2,
+            TaskbarList as CLSID_TaskbarList, HWND, S_OK,
         },
+        dark_mode::try_theme,
         dpi::{dpi_to_scale_factor, enable_non_client_dpi_scaling, hwnd_dpi},
         drop_handler::FileDropHandler,
         event_loop::{self, EventLoopWindowTarget, DESTROY_MSG_ID},
@@ -1189,7 +1189,7 @@ unsafe fn taskbar_mark_fullscreen(handle: HWND, fullscreen: bool) {
                 return;
             }
 
-            let hr_init = (*(*task_bar_list2).lpVtbl).parent.HrInit;
+            let hr_init = (*task_bar_list2).vtable().base__.HrInit;
             if hr_init(task_bar_list2.cast()) != S_OK {
                 // In some old windows, the taskbar object could not be created, we just ignore it
                 return;
@@ -1198,8 +1198,8 @@ unsafe fn taskbar_mark_fullscreen(handle: HWND, fullscreen: bool) {
         }
 
         task_bar_list2 = task_bar_list2_ptr.get();
-        let mark_fullscreen_window = (*(*task_bar_list2).lpVtbl).MarkFullscreenWindow;
-        mark_fullscreen_window(task_bar_list2, handle, fullscreen.into());
+        let mark_fullscreen_window = (*task_bar_list2).vtable().MarkFullscreenWindow;
+        mark_fullscreen_window(task_bar_list2.cast(), handle, fullscreen.into());
     })
 }
 
@@ -1221,7 +1221,7 @@ pub(crate) unsafe fn set_skip_taskbar(hwnd: HWND, skip: bool) {
                 return;
             }
 
-            let hr_init = (*(*task_bar_list).lpVtbl).HrInit;
+            let hr_init = (*task_bar_list).vtable().HrInit;
             if hr_init(task_bar_list.cast()) != S_OK {
                 // In some old windows, the taskbar object could not be created, we just ignore it
                 return;
@@ -1231,11 +1231,11 @@ pub(crate) unsafe fn set_skip_taskbar(hwnd: HWND, skip: bool) {
 
         task_bar_list = task_bar_list_ptr.get();
         if skip {
-            let delete_tab = (*(*task_bar_list).lpVtbl).DeleteTab;
-            delete_tab(task_bar_list, hwnd);
+            let delete_tab = (*task_bar_list).vtable().DeleteTab;
+            delete_tab(task_bar_list.cast(), hwnd);
         } else {
-            let add_tab = (*(*task_bar_list).lpVtbl).AddTab;
-            add_tab(task_bar_list, hwnd);
+            let add_tab = (*task_bar_list).vtable().AddTab;
+            add_tab(task_bar_list.cast(), hwnd);
         }
     });
 }

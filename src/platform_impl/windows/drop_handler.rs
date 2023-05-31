@@ -8,11 +8,10 @@ use std::{
 
 use crate::platform_impl::platform::{
     bindings::{
-        DragFinish, DragQueryFileW, IDataObject, IUnknown, CF_HDROP, DROPEFFECT_COPY,
-        DROPEFFECT_NONE, DVASPECT_CONTENT, DV_E_FORMATETC, FORMATETC, GUID, HDROP, HRESULT, HWND,
-        POINTL, S_OK, TYMED_HGLOBAL,
+        DragFinish, DragQueryFileW, IDataObject, IDropTarget, IDropTarget_Vtbl, IUnknown_Vtbl,
+        CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE, DVASPECT_CONTENT, DV_E_FORMATETC,
+        FORMATETC, GUID, HDROP, HRESULT, HWND, MODIFIERKEYS_FLAGS, POINTL, S_OK, TYMED_HGLOBAL,
     },
-    definitions::{IDataObjectVtbl, IDropTarget, IDropTargetVtbl, IUnknownVtbl},
     WindowId,
 };
 
@@ -36,9 +35,9 @@ pub struct FileDropHandler {
 impl FileDropHandler {
     pub fn new(window: HWND, send_event: Box<dyn Fn(Event<'static, ()>)>) -> FileDropHandler {
         let data = Box::new(FileDropHandlerData {
-            interface: IDropTarget {
-                lpVtbl: &DROP_TARGET_VTBL as *const IDropTargetVtbl,
-            },
+            interface: IDropTarget(
+                std::ptr::NonNull::new(&DROP_TARGET_VTBL as *const _ as *mut _).unwrap(),
+            ),
             refcount: AtomicUsize::new(1),
             window,
             send_event,
@@ -52,22 +51,22 @@ impl FileDropHandler {
 
     // Implement IUnknown
     pub unsafe extern "system" fn QueryInterface(
-        _this: *mut IUnknown,
+        _this: *mut c_void,
         _riid: *const GUID,
-        _ppvObject: *mut *mut c_void,
+        _ppvObject: *mut *const c_void,
     ) -> HRESULT {
         // This function doesn't appear to be required for an `IDropTarget`.
         // An implementation would be nice however.
         unimplemented!();
     }
 
-    pub unsafe extern "system" fn AddRef(this: *mut IUnknown) -> u32 {
+    pub unsafe extern "system" fn AddRef(this: *mut c_void) -> u32 {
         let drop_handler_data = Self::from_interface(this);
         let count = drop_handler_data.refcount.fetch_add(1, Ordering::Release) + 1;
         count as u32
     }
 
-    pub unsafe extern "system" fn Release(this: *mut IUnknown) -> u32 {
+    pub unsafe extern "system" fn Release(this: *mut c_void) -> u32 {
         let drop_handler = Self::from_interface(this);
         let count = drop_handler.refcount.fetch_sub(1, Ordering::Release) - 1;
         if count == 0 {
@@ -78,15 +77,15 @@ impl FileDropHandler {
     }
 
     pub unsafe extern "system" fn DragEnter(
-        this: *mut IDropTarget,
-        pDataObj: *const IDataObject,
-        _grfKeyState: u32,
-        _pt: *const POINTL,
-        pdwEffect: *mut u32,
+        this: *mut c_void,
+        pDataObj: *mut c_void,
+        _grfKeyState: MODIFIERKEYS_FLAGS,
+        _pt: POINTL,
+        pdwEffect: *mut DROPEFFECT,
     ) -> HRESULT {
         use crate::event::WindowEvent::HoveredFile;
         let drop_handler = Self::from_interface(this);
-        let hdrop = Self::iterate_filenames(pDataObj, |filename| {
+        let hdrop = Self::iterate_filenames(pDataObj.cast(), |filename| {
             drop_handler.send_event(Event::WindowEvent {
                 window_id: RootWindowId(WindowId(drop_handler.window)),
                 event: HoveredFile(filename),
@@ -104,10 +103,10 @@ impl FileDropHandler {
     }
 
     pub unsafe extern "system" fn DragOver(
-        this: *mut IDropTarget,
-        _grfKeyState: u32,
-        _pt: *const POINTL,
-        pdwEffect: *mut u32,
+        this: *mut c_void,
+        _grfKeyState: MODIFIERKEYS_FLAGS,
+        _pt: POINTL,
+        pdwEffect: *mut DROPEFFECT,
     ) -> HRESULT {
         let drop_handler = Self::from_interface(this);
         *pdwEffect = drop_handler.cursor_effect;
@@ -115,7 +114,7 @@ impl FileDropHandler {
         S_OK
     }
 
-    pub unsafe extern "system" fn DragLeave(this: *mut IDropTarget) -> HRESULT {
+    pub unsafe extern "system" fn DragLeave(this: *mut c_void) -> HRESULT {
         use crate::event::WindowEvent::HoveredFileCancelled;
         let drop_handler = Self::from_interface(this);
         if drop_handler.hovered_is_valid {
@@ -129,15 +128,15 @@ impl FileDropHandler {
     }
 
     pub unsafe extern "system" fn Drop(
-        this: *mut IDropTarget,
-        pDataObj: *const IDataObject,
-        _grfKeyState: u32,
-        _pt: *const POINTL,
-        _pdwEffect: *mut u32,
+        this: *mut c_void,
+        pDataObj: *mut c_void,
+        _grfKeyState: MODIFIERKEYS_FLAGS,
+        _pt: POINTL,
+        _pdwEffect: *mut DROPEFFECT,
     ) -> HRESULT {
         use crate::event::WindowEvent::DroppedFile;
         let drop_handler = Self::from_interface(this);
-        let hdrop = Self::iterate_filenames(pDataObj, |filename| {
+        let hdrop = Self::iterate_filenames(pDataObj.cast(), |filename| {
             drop_handler.send_event(Event::WindowEvent {
                 window_id: RootWindowId(WindowId(drop_handler.window)),
                 event: DroppedFile(filename),
@@ -154,7 +153,7 @@ impl FileDropHandler {
         &mut *(this as *mut _)
     }
 
-    unsafe fn iterate_filenames<F>(data_obj: *const IDataObject, callback: F) -> Option<HDROP>
+    unsafe fn iterate_filenames<F>(data_obj: *mut IDataObject, callback: F) -> Option<HDROP>
     where
         F: Fn(PathBuf),
     {
@@ -166,11 +165,11 @@ impl FileDropHandler {
             tymed: TYMED_HGLOBAL as u32,
         };
 
-        let mut medium = std::mem::zeroed();
-        let get_data_fn = (*(*data_obj).cast::<IDataObjectVtbl>()).GetData;
-        let get_data_result = get_data_fn(data_obj as *mut _, &drop_format, &mut medium);
+        let mut medium = std::mem::MaybeUninit::uninit();
+        let get_data_fn = (*data_obj).vtable().GetData;
+        let get_data_result = get_data_fn(data_obj as *mut _, &drop_format, medium.as_mut_ptr());
         if get_data_result >= 0 {
-            let hdrop = medium.u.hGlobal;
+            let hdrop = medium.assume_init().u.hGlobal;
 
             // The second parameter (0xFFFFFFFF) instructs the function to return the item count
             let item_count = DragQueryFileW(hdrop, 0xFFFFFFFF, ptr::null_mut(), 0);
@@ -212,13 +211,13 @@ impl FileDropHandlerData {
 impl Drop for FileDropHandler {
     fn drop(&mut self) {
         unsafe {
-            FileDropHandler::Release(self.data as *mut IUnknown);
+            FileDropHandler::Release(self.data.cast());
         }
     }
 }
 
-static DROP_TARGET_VTBL: IDropTargetVtbl = IDropTargetVtbl {
-    parent: IUnknownVtbl {
+static DROP_TARGET_VTBL: IDropTarget_Vtbl = IDropTarget_Vtbl {
+    base__: IUnknown_Vtbl {
         QueryInterface: FileDropHandler::QueryInterface,
         AddRef: FileDropHandler::AddRef,
         Release: FileDropHandler::Release,
