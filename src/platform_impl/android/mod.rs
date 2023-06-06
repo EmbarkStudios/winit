@@ -343,6 +343,7 @@ impl<T: 'static> EventLoop<T> {
             Ok(mut input_iter) => {
                 loop {
                     let read_event = input_iter.next(|event| {
+                        let mut input_status = InputStatus::Handled;
                         match event {
                             InputEvent::MotionEvent(motion_event) => {
                                 let window_id = window::WindowId(WindowId);
@@ -409,20 +410,54 @@ impl<T: 'static> EventLoop<T> {
                                 }
                             }
                             InputEvent::KeyEvent(key) => {
-                                let device_id = event::DeviceId(DeviceId);
+                                match key.key_code() {
+                                    // Flag keys related to volume as unhandled. While winit does not have a way for applications
+                                    // to configure what keys to flag as handled, this appears to be a good default until winit
+                                    // can be configured.
+                                    Keycode::VolumeUp |
+                                    Keycode::VolumeDown |
+                                    Keycode::VolumeMute => {
+                                        input_status = InputStatus::Unhandled
+                                    },
+                                    keycode => {
+                                        let device_id = event::DeviceId(DeviceId);
 
-                                let state = match key.action() {
-                                    KeyAction::Down => event::ElementState::Pressed,
-                                    KeyAction::Up => event::ElementState::Released,
-                                    _ => event::ElementState::Released,
-                                };
+                                        let state = match key.action() {
+                                            KeyAction::Down => event::ElementState::Pressed,
+                                            KeyAction::Up => event::ElementState::Released,
+                                            _ => event::ElementState::Released,
+                                        };
 
-                                if state == ElementState::Pressed {
-                                    let key_char = keycodes::character_map_and_combine_key(&android_app, key, &mut self.combining_accent);
-                                    if let Some(KeyMapChar::Unicode(character)) = key_char {
+                                        if state == ElementState::Pressed {
+                                            let key_char = keycodes::character_map_and_combine_key(&android_app, key, &mut self.combining_accent);
+                                            if let Some(KeyMapChar::Unicode(character)) = key_char {
+                                                let event = event::Event::WindowEvent {
+                                                    window_id: window::WindowId(WindowId),
+                                                    event: event::WindowEvent::ReceivedCharacter(character)
+                                                };
+                                                sticky_exit_callback(
+                                                    event,
+                                                    self.window_target(),
+                                                    &mut control_flow,
+                                                    callback
+                                                );
+                                            }
+                                        }
+                                        #[allow(deprecated)]
                                         let event = event::Event::WindowEvent {
                                             window_id: window::WindowId(WindowId),
-                                            event: event::WindowEvent::ReceivedCharacter(character)
+                                            event: event::WindowEvent::KeyboardInput {
+                                                device_id,
+                                                input: event::KeyboardInput {
+                                                    scancode: key.scan_code() as u32,
+                                                    state,
+                                                    virtual_keycode: keycodes::to_physical_keycode(
+                                                        keycode,
+                                                    ),
+                                                    modifiers: event::ModifiersState::default(),
+                                                },
+                                                is_synthetic: false,
+                                            },
                                         };
                                         sticky_exit_callback(
                                             event,
@@ -432,37 +467,13 @@ impl<T: 'static> EventLoop<T> {
                                         );
                                     }
                                 }
-                                #[allow(deprecated)]
-                                let event = event::Event::WindowEvent {
-                                    window_id: window::WindowId(WindowId),
-                                    event: event::WindowEvent::KeyboardInput {
-                                        device_id,
-                                        input: event::KeyboardInput {
-                                            scancode: key.scan_code() as u32,
-                                            state,
-                                            virtual_keycode: keycodes::to_physical_keycode(
-                                                key.key_code(),
-                                            ),
-                                            modifiers: event::ModifiersState::default(),
-                                        },
-                                        is_synthetic: false,
-                                    },
-                                };
-                                sticky_exit_callback(
-                                    event,
-                                    self.window_target(),
-                                    &mut control_flow,
-                                    callback
-                                );
                             }
                             _ => {
                                 warn!("Unknown android_activity input event {event:?}")
                             }
                         }
 
-                        // Assume all events are handled, while Winit doesn't currently give a way for
-                        // applications to report whether they handled an input event.
-                        InputStatus::Handled
+                        input_status
                     });
 
                     if !read_event {
