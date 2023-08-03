@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use android_activity::input::{InputEvent, KeyAction, Keycode, MotionAction};
+use android_activity::input::{InputEvent, KeyAction, KeyMapChar, Keycode, MotionAction};
 use android_activity::{
     AndroidApp, AndroidAppWaker, ConfigurationRef, InputStatus, MainEvent, Rect,
 };
@@ -22,7 +22,7 @@ use raw_window_handle::{
 use crate::{
     dpi::{PhysicalPosition, PhysicalSize, Position, Size},
     error,
-    event::{self, StartCause, VirtualKeyCode},
+    event::{self, ElementState, StartCause},
     event_loop::{self, ControlFlow, EventLoopWindowTarget as RootELW},
     window::{
         self, CursorGrabMode, ImePurpose, ResizeDirection, Theme, WindowButtons, WindowLevel,
@@ -30,171 +30,9 @@ use crate::{
 };
 use crate::{error::ExternalError, event::PumpStatus, platform_impl::Fullscreen};
 
+mod keycodes;
+
 static HAS_FOCUS: Lazy<RwLock<bool>> = Lazy::new(|| RwLock::new(true));
-
-fn ndk_keycode_to_virtualkeycode(keycode: Keycode) -> Option<event::VirtualKeyCode> {
-    match keycode {
-        Keycode::A => Some(VirtualKeyCode::A),
-        Keycode::B => Some(VirtualKeyCode::B),
-        Keycode::C => Some(VirtualKeyCode::C),
-        Keycode::D => Some(VirtualKeyCode::D),
-        Keycode::E => Some(VirtualKeyCode::E),
-        Keycode::F => Some(VirtualKeyCode::F),
-        Keycode::G => Some(VirtualKeyCode::G),
-        Keycode::H => Some(VirtualKeyCode::H),
-        Keycode::I => Some(VirtualKeyCode::I),
-        Keycode::J => Some(VirtualKeyCode::J),
-        Keycode::K => Some(VirtualKeyCode::K),
-        Keycode::L => Some(VirtualKeyCode::L),
-        Keycode::M => Some(VirtualKeyCode::M),
-        Keycode::N => Some(VirtualKeyCode::N),
-        Keycode::O => Some(VirtualKeyCode::O),
-        Keycode::P => Some(VirtualKeyCode::P),
-        Keycode::Q => Some(VirtualKeyCode::Q),
-        Keycode::R => Some(VirtualKeyCode::R),
-        Keycode::S => Some(VirtualKeyCode::S),
-        Keycode::T => Some(VirtualKeyCode::T),
-        Keycode::U => Some(VirtualKeyCode::U),
-        Keycode::V => Some(VirtualKeyCode::V),
-        Keycode::W => Some(VirtualKeyCode::W),
-        Keycode::X => Some(VirtualKeyCode::X),
-        Keycode::Y => Some(VirtualKeyCode::Y),
-        Keycode::Z => Some(VirtualKeyCode::Z),
-
-        Keycode::Keycode0 => Some(VirtualKeyCode::Key0),
-        Keycode::Keycode1 => Some(VirtualKeyCode::Key1),
-        Keycode::Keycode2 => Some(VirtualKeyCode::Key2),
-        Keycode::Keycode3 => Some(VirtualKeyCode::Key3),
-        Keycode::Keycode4 => Some(VirtualKeyCode::Key4),
-        Keycode::Keycode5 => Some(VirtualKeyCode::Key5),
-        Keycode::Keycode6 => Some(VirtualKeyCode::Key6),
-        Keycode::Keycode7 => Some(VirtualKeyCode::Key7),
-        Keycode::Keycode8 => Some(VirtualKeyCode::Key8),
-        Keycode::Keycode9 => Some(VirtualKeyCode::Key9),
-
-        Keycode::Numpad0 => Some(VirtualKeyCode::Numpad0),
-        Keycode::Numpad1 => Some(VirtualKeyCode::Numpad1),
-        Keycode::Numpad2 => Some(VirtualKeyCode::Numpad2),
-        Keycode::Numpad3 => Some(VirtualKeyCode::Numpad3),
-        Keycode::Numpad4 => Some(VirtualKeyCode::Numpad4),
-        Keycode::Numpad5 => Some(VirtualKeyCode::Numpad5),
-        Keycode::Numpad6 => Some(VirtualKeyCode::Numpad6),
-        Keycode::Numpad7 => Some(VirtualKeyCode::Numpad7),
-        Keycode::Numpad8 => Some(VirtualKeyCode::Numpad8),
-        Keycode::Numpad9 => Some(VirtualKeyCode::Numpad9),
-
-        Keycode::NumpadAdd => Some(VirtualKeyCode::NumpadAdd),
-        Keycode::NumpadSubtract => Some(VirtualKeyCode::NumpadSubtract),
-        Keycode::NumpadMultiply => Some(VirtualKeyCode::NumpadMultiply),
-        Keycode::NumpadDivide => Some(VirtualKeyCode::NumpadDivide),
-        Keycode::NumpadEnter => Some(VirtualKeyCode::NumpadEnter),
-        Keycode::NumpadEquals => Some(VirtualKeyCode::NumpadEquals),
-        Keycode::NumpadComma => Some(VirtualKeyCode::NumpadComma),
-        Keycode::NumpadDot => Some(VirtualKeyCode::NumpadDecimal),
-        Keycode::NumLock => Some(VirtualKeyCode::Numlock),
-
-        Keycode::DpadLeft => Some(VirtualKeyCode::Left),
-        Keycode::DpadRight => Some(VirtualKeyCode::Right),
-        Keycode::DpadUp => Some(VirtualKeyCode::Up),
-        Keycode::DpadDown => Some(VirtualKeyCode::Down),
-
-        Keycode::F1 => Some(VirtualKeyCode::F1),
-        Keycode::F2 => Some(VirtualKeyCode::F2),
-        Keycode::F3 => Some(VirtualKeyCode::F3),
-        Keycode::F4 => Some(VirtualKeyCode::F4),
-        Keycode::F5 => Some(VirtualKeyCode::F5),
-        Keycode::F6 => Some(VirtualKeyCode::F6),
-        Keycode::F7 => Some(VirtualKeyCode::F7),
-        Keycode::F8 => Some(VirtualKeyCode::F8),
-        Keycode::F9 => Some(VirtualKeyCode::F9),
-        Keycode::F10 => Some(VirtualKeyCode::F10),
-        Keycode::F11 => Some(VirtualKeyCode::F11),
-        Keycode::F12 => Some(VirtualKeyCode::F12),
-
-        Keycode::Space => Some(VirtualKeyCode::Space),
-        Keycode::Escape => Some(VirtualKeyCode::Escape),
-        Keycode::Enter => Some(VirtualKeyCode::Return), // not on the Numpad
-        Keycode::Tab => Some(VirtualKeyCode::Tab),
-
-        Keycode::PageUp => Some(VirtualKeyCode::PageUp),
-        Keycode::PageDown => Some(VirtualKeyCode::PageDown),
-        Keycode::MoveHome => Some(VirtualKeyCode::Home),
-        Keycode::MoveEnd => Some(VirtualKeyCode::End),
-        Keycode::Insert => Some(VirtualKeyCode::Insert),
-
-        Keycode::Del => Some(VirtualKeyCode::Back), // Backspace (above Enter)
-        Keycode::ForwardDel => Some(VirtualKeyCode::Delete), // Delete (below Insert)
-
-        Keycode::Copy => Some(VirtualKeyCode::Copy),
-        Keycode::Paste => Some(VirtualKeyCode::Paste),
-        Keycode::Cut => Some(VirtualKeyCode::Cut),
-
-        Keycode::VolumeUp => Some(VirtualKeyCode::VolumeUp),
-        Keycode::VolumeDown => Some(VirtualKeyCode::VolumeDown),
-        Keycode::VolumeMute => Some(VirtualKeyCode::Mute), // ???
-        Keycode::Mute => Some(VirtualKeyCode::Mute),       // ???
-        Keycode::MediaPlayPause => Some(VirtualKeyCode::PlayPause),
-        Keycode::MediaStop => Some(VirtualKeyCode::MediaStop), // ??? simple "Stop"?
-        Keycode::MediaNext => Some(VirtualKeyCode::NextTrack),
-        Keycode::MediaPrevious => Some(VirtualKeyCode::PrevTrack),
-
-        Keycode::Plus => Some(VirtualKeyCode::Plus),
-        Keycode::Minus => Some(VirtualKeyCode::Minus),
-        Keycode::Equals => Some(VirtualKeyCode::Equals),
-        Keycode::Semicolon => Some(VirtualKeyCode::Semicolon),
-        Keycode::Slash => Some(VirtualKeyCode::Slash),
-        Keycode::Backslash => Some(VirtualKeyCode::Backslash),
-        Keycode::Comma => Some(VirtualKeyCode::Comma),
-        Keycode::Period => Some(VirtualKeyCode::Period),
-        Keycode::Apostrophe => Some(VirtualKeyCode::Apostrophe),
-        Keycode::Grave => Some(VirtualKeyCode::Grave),
-        Keycode::At => Some(VirtualKeyCode::At),
-
-        // TODO: Maybe mapping this to Snapshot makes more sense? See: "PrtScr/SysRq"
-        Keycode::Sysrq => Some(VirtualKeyCode::Sysrq),
-        // These are usually the same (Pause/Break)
-        Keycode::Break => Some(VirtualKeyCode::Pause),
-        // These are exactly the same
-        Keycode::ScrollLock => Some(VirtualKeyCode::Scroll),
-
-        Keycode::Yen => Some(VirtualKeyCode::Yen),
-        Keycode::Kana => Some(VirtualKeyCode::Kana),
-
-        Keycode::CtrlLeft => Some(VirtualKeyCode::LControl),
-        Keycode::CtrlRight => Some(VirtualKeyCode::RControl),
-
-        Keycode::ShiftLeft => Some(VirtualKeyCode::LShift),
-        Keycode::ShiftRight => Some(VirtualKeyCode::RShift),
-
-        Keycode::AltLeft => Some(VirtualKeyCode::LAlt),
-        Keycode::AltRight => Some(VirtualKeyCode::RAlt),
-
-        // Different names for the same keys
-        Keycode::MetaLeft => Some(VirtualKeyCode::LWin),
-        Keycode::MetaRight => Some(VirtualKeyCode::RWin),
-
-        Keycode::LeftBracket => Some(VirtualKeyCode::LBracket),
-        Keycode::RightBracket => Some(VirtualKeyCode::RBracket),
-
-        Keycode::Power => Some(VirtualKeyCode::Power),
-        Keycode::Sleep => Some(VirtualKeyCode::Sleep), // what about SoftSleep?
-        Keycode::Wakeup => Some(VirtualKeyCode::Wake),
-
-        Keycode::NavigateNext => Some(VirtualKeyCode::NavigateForward),
-        Keycode::NavigatePrevious => Some(VirtualKeyCode::NavigateBackward),
-
-        Keycode::Calculator => Some(VirtualKeyCode::Calculator),
-        Keycode::Explorer => Some(VirtualKeyCode::MyComputer), // "close enough"
-        Keycode::Envelope => Some(VirtualKeyCode::Mail),       // "close enough"
-
-        Keycode::Star => Some(VirtualKeyCode::Asterisk), // ???
-        Keycode::AllApps => Some(VirtualKeyCode::Apps),  // ???
-        Keycode::AppSwitch => Some(VirtualKeyCode::Apps), // ???
-        Keycode::Refresh => Some(VirtualKeyCode::WebRefresh), // ???
-
-        _ => None,
-    }
-}
 
 /// Returns the minimum `Option<Duration>`, taking into account that `None`
 /// equates to an infinite timeout, not a zero timeout (so can't just use
@@ -307,6 +145,7 @@ pub struct EventLoop<T: 'static> {
     pending_redraw: bool,
     control_flow: ControlFlow,
     cause: StartCause,
+    combining_accent: Option<char>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -359,6 +198,7 @@ impl<T: 'static> EventLoop<T> {
             pending_redraw: false,
             control_flow: Default::default(),
             cause: StartCause::Init,
+            combining_accent: None,
         }
     }
 
@@ -494,83 +334,92 @@ impl<T: 'static> EventLoop<T> {
             trace!("No main event to handle");
         }
 
+        // temporarily decouple `android_app` from `self` so we aren't holding
+        // a borrow of `self` while iterating
+        let android_app = self.android_app.clone();
+
         // Process input events
+        match android_app.input_events_iter() {
+            Ok(mut input_iter) => {
+                loop {
+                    let read_event = input_iter.next(|event| {
+                        match event {
+                            InputEvent::MotionEvent(motion_event) => {
+                                let window_id = window::WindowId(WindowId);
+                                let device_id = event::DeviceId(DeviceId);
 
-        self.android_app.input_events(|event| {
-            match event {
-                InputEvent::MotionEvent(motion_event) => {
-                    let window_id = window::WindowId(WindowId);
-                    let device_id = event::DeviceId(DeviceId);
+                                let phase = match motion_event.action() {
+                                    MotionAction::Down | MotionAction::PointerDown => {
+                                        Some(event::TouchPhase::Started)
+                                    }
+                                    MotionAction::Up | MotionAction::PointerUp => {
+                                        Some(event::TouchPhase::Ended)
+                                    }
+                                    MotionAction::Move => Some(event::TouchPhase::Moved),
+                                    MotionAction::Cancel => {
+                                        Some(event::TouchPhase::Cancelled)
+                                    }
+                                    _ => {
+                                        None // TODO mouse events
+                                    }
+                                };
+                                if let Some(phase) = phase {
+                                    let pointers: Box<
+                                        dyn Iterator<Item = android_activity::input::Pointer<'_>>,
+                                    > = match phase {
+                                        event::TouchPhase::Started
+                                        | event::TouchPhase::Ended => {
+                                            Box::new(
+                                                std::iter::once(motion_event.pointer_at_index(
+                                                    motion_event.pointer_index(),
+                                                ))
+                                            )
+                                        },
+                                        event::TouchPhase::Moved
+                                        | event::TouchPhase::Cancelled => {
+                                            Box::new(motion_event.pointers())
+                                        }
+                                    };
 
-                    let phase = match motion_event.action() {
-                        MotionAction::Down | MotionAction::PointerDown => {
-                            Some(event::TouchPhase::Started)
-                        }
-                        MotionAction::Up | MotionAction::PointerUp => {
-                            Some(event::TouchPhase::Ended)
-                        }
-                        MotionAction::Move => Some(event::TouchPhase::Moved),
-                        MotionAction::Cancel => {
-                            Some(event::TouchPhase::Cancelled)
-                        }
-                        _ => {
-                            None // TODO mouse events
-                        }
-                    };
-                    if let Some(phase) = phase {
-                        let pointers: Box<
-                            dyn Iterator<Item = android_activity::input::Pointer<'_>>,
-                        > = match phase {
-                            event::TouchPhase::Started
-                            | event::TouchPhase::Ended => {
-                                Box::new(
-                                    std::iter::once(motion_event.pointer_at_index(
-                                        motion_event.pointer_index(),
-                                    ))
-                                )
-                            },
-                            event::TouchPhase::Moved
-                            | event::TouchPhase::Cancelled => {
-                                Box::new(motion_event.pointers())
+                                    for pointer in pointers {
+                                        let location = PhysicalPosition {
+                                            x: pointer.x() as _,
+                                            y: pointer.y() as _,
+                                        };
+                                        trace!("Input event {device_id:?}, {phase:?}, loc={location:?}, pointer={pointer:?}");
+                                        let event = event::Event::WindowEvent {
+                                            window_id,
+                                            event: event::WindowEvent::Touch(
+                                                event::Touch {
+                                                    device_id,
+                                                    phase,
+                                                    location,
+                                                    id: pointer.pointer_id() as u64,
+                                                    force: None,
+                                                },
+                                            ),
+                                        };
+                                        sticky_exit_callback(
+                                            event,
+                                            self.window_target(),
+                                            &mut control_flow,
+                                            callback
+                                        );
+                                    }
+                                }
                             }
-                        };
+                            InputEvent::KeyEvent(key) => {
+                                let device_id = event::DeviceId(DeviceId);
 
-                        for pointer in pointers {
-                            let location = PhysicalPosition {
-                                x: pointer.x() as _,
-                                y: pointer.y() as _,
-                            };
-                            trace!("Input event {device_id:?}, {phase:?}, loc={location:?}, pointer={pointer:?}");
-                            let event = event::Event::WindowEvent {
-                                window_id,
-                                event: event::WindowEvent::Touch(
-                                    event::Touch {
-                                        device_id,
-                                        phase,
-                                        location,
-                                        id: pointer.pointer_id() as u64,
-                                        force: None,
-                                    },
-                                ),
-                            };
-                            sticky_exit_callback(
-                                event,
-                                self.window_target(),
-                                &mut control_flow,
-                                callback
-                            );
-                        }
-                    }
-                }
-                InputEvent::KeyEvent(key) => {
-                    let device_id = event::DeviceId(DeviceId);
+                                let state = match key.action() {
+                                    KeyAction::Down => event::ElementState::Pressed,
+                                    KeyAction::Up => event::ElementState::Released,
+                                    _ => event::ElementState::Released,
+                                };
 
-                    let state = match key.action() {
-                        KeyAction::Down => event::ElementState::Pressed,
-                        KeyAction::Up => {
-                            match get_character_from_key(key.key_code())
-                                {
-                                    Some(character) => {
+                                if state == ElementState::Pressed {
+                                    let key_char = keycodes::character_map_and_combine_key(&android_app, key, &mut self.combining_accent);
+                                    if let Some(KeyMapChar::Unicode(character)) = key_char {
                                         let event = event::Event::WindowEvent {
                                             window_id: window::WindowId(WindowId),
                                             event: event::WindowEvent::ReceivedCharacter(character)
@@ -581,45 +430,50 @@ impl<T: 'static> EventLoop<T> {
                                             &mut control_flow,
                                             callback
                                         );
+                                    }
+                                }
+                                #[allow(deprecated)]
+                                let event = event::Event::WindowEvent {
+                                    window_id: window::WindowId(WindowId),
+                                    event: event::WindowEvent::KeyboardInput {
+                                        device_id,
+                                        input: event::KeyboardInput {
+                                            scancode: key.scan_code() as u32,
+                                            state,
+                                            virtual_keycode: keycodes::to_physical_keycode(
+                                                key.key_code(),
+                                            ),
+                                            modifiers: event::ModifiersState::default(),
+                                        },
+                                        is_synthetic: false,
                                     },
-                                    None => {}
                                 };
-                            event::ElementState::Released
-                        },
-                        _ => event::ElementState::Released,
-                    };
-                    #[allow(deprecated)]
-                    let event = event::Event::WindowEvent {
-                        window_id: window::WindowId(WindowId),
-                        event: event::WindowEvent::KeyboardInput {
-                            device_id,
-                            input: event::KeyboardInput {
-                                scancode: key.scan_code() as u32,
-                                state,
-                                virtual_keycode: ndk_keycode_to_virtualkeycode(
-                                    key.key_code(),
-                                ),
-                                modifiers: event::ModifiersState::default(),
-                            },
-                            is_synthetic: false,
-                        },
-                    };
-                    sticky_exit_callback(
-                        event,
-                        self.window_target(),
-                        &mut control_flow,
-                        callback
-                    );
-                }
-                _ => {
-                    warn!("Unknown android_activity input event {event:?}")
+                                sticky_exit_callback(
+                                    event,
+                                    self.window_target(),
+                                    &mut control_flow,
+                                    callback
+                                );
+                            }
+                            _ => {
+                                warn!("Unknown android_activity input event {event:?}")
+                            }
+                        }
+
+                        // Assume all events are handled, while Winit doesn't currently give a way for
+                        // applications to report whether they handled an input event.
+                        InputStatus::Handled
+                    });
+
+                    if !read_event {
+                        break;
+                    }
                 }
             }
-
-            // Assume all events are handled, while Winit doesn't currently give a way for
-            // applications to report whether they handled an input event.
-            InputStatus::Handled
-        });
+            Err(err) => {
+                log::error!("Failed to get input events iterator: {err:?}");
+            }
+        }
 
         // Empty the user event buffer
         {
@@ -1237,74 +1091,5 @@ impl VideoMode {
 
     pub fn monitor(&self) -> MonitorHandle {
         self.monitor.clone()
-    }
-}
-
-pub fn get_character_from_key(key_code: Keycode) -> Option<char> {
-    match key_code {
-        Keycode::A => Some('A'),
-        Keycode::B => Some('B'),
-        Keycode::C => Some('C'),
-        Keycode::D => Some('D'),
-        Keycode::E => Some('E'),
-        Keycode::F => Some('F'),
-        Keycode::G => Some('G'),
-        Keycode::H => Some('H'),
-        Keycode::I => Some('I'),
-        Keycode::J => Some('J'),
-        Keycode::K => Some('K'),
-        Keycode::L => Some('L'),
-        Keycode::M => Some('M'),
-        Keycode::N => Some('N'),
-        Keycode::O => Some('O'),
-        Keycode::P => Some('P'),
-        Keycode::Q => Some('Q'),
-        Keycode::R => Some('R'),
-        Keycode::S => Some('S'),
-        Keycode::T => Some('T'),
-        Keycode::U => Some('U'),
-        Keycode::V => Some('V'),
-        Keycode::W => Some('W'),
-        Keycode::X => Some('X'),
-        Keycode::Y => Some('Y'),
-        Keycode::Z => Some('Z'),
-
-        Keycode::Keycode0 => Some('0'),
-        Keycode::Keycode1 => Some('1'),
-        Keycode::Keycode2 => Some('2'),
-        Keycode::Keycode3 => Some('3'),
-        Keycode::Keycode4 => Some('4'),
-        Keycode::Keycode5 => Some('5'),
-        Keycode::Keycode6 => Some('6'),
-        Keycode::Keycode7 => Some('7'),
-        Keycode::Keycode8 => Some('8'),
-        Keycode::Keycode9 => Some('9'),
-
-        Keycode::Numpad0 => Some('0'),
-        Keycode::Numpad1 => Some('1'),
-        Keycode::Numpad2 => Some('2'),
-        Keycode::Numpad3 => Some('3'),
-        Keycode::Numpad4 => Some('4'),
-        Keycode::Numpad5 => Some('5'),
-        Keycode::Numpad6 => Some('6'),
-        Keycode::Numpad7 => Some('7'),
-        Keycode::Numpad8 => Some('8'),
-        Keycode::Numpad9 => Some('9'),
-
-        Keycode::Plus => Some('+'),
-        Keycode::Minus => Some('-'),
-        Keycode::Equals => Some('='),
-        // TODO: Somehow figure out how to make the difference between colon and semicolon
-        // In order to type in http:... we need colon and not semicolon, hence the change.
-        Keycode::Semicolon => Some(':'),
-        Keycode::Slash => Some('/'),
-        Keycode::Backslash => Some('\\'),
-        Keycode::Comma => Some(','),
-        Keycode::Period => Some('.'),
-        Keycode::Apostrophe => Some('\''),
-        Keycode::At => Some('@'),
-        Keycode::Space => Some(' '),
-
-        _ => None,
     }
 }
