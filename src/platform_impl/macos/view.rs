@@ -208,7 +208,7 @@ declare_class!(
                 self.removeTrackingRect(tracking_rect);
             }
 
-            let rect = self.visibleRect();
+            let rect = self.frame();
             let tracking_rect = self.add_tracking_rect(rect, false);
             self.state.tracking_rect = Some(tracking_rect);
         }
@@ -220,7 +220,7 @@ declare_class!(
                 self.removeTrackingRect(tracking_rect);
             }
 
-            let rect = self.visibleRect();
+            let rect = self.frame();
             let tracking_rect = self.add_tracking_rect(rect, false);
             self.state.tracking_rect = Some(tracking_rect);
 
