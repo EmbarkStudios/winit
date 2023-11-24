@@ -6,7 +6,9 @@ use std::time::Instant;
 use objc2::rc::Retained;
 use objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass};
 use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate};
-use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol};
+use objc2_foundation::{
+    MainThreadMarker, NSArray, NSNotification, NSObject, NSObjectProtocol, NSURL,
+};
 
 use super::event_handler::EventHandler;
 use super::event_loop::{stop_app_immediately, ActiveEventLoop, PanicInfo};
@@ -67,6 +69,14 @@ declare_class!(
         #[method(applicationWillTerminate:)]
         fn app_will_terminate(&self, notification: &NSNotification) {
             self.will_terminate(notification)
+        }
+
+        #[method(application:openURLs:)]
+        fn application_open_urls(&self, _application: &NSObject, urls: &NSArray<NSURL>) {
+            let urls: Vec<_> = urls.iter().map(|url| unsafe { url.absoluteString() }).flatten().map(|url| url.to_string()).collect();
+            if !urls.is_empty() {
+                self.maybe_queue_event(Event::OpenURLs { urls })
+            }
         }
     }
 );

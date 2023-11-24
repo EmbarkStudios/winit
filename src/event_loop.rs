@@ -642,6 +642,7 @@ pub(crate) fn dispatch_event_for_app<T: 'static, A: ApplicationHandler<T>>(
         Event::WindowEvent { window_id, event } => app.window_event(event_loop, window_id, event),
         Event::DeviceEvent { device_id, event } => app.device_event(event_loop, device_id, event),
         Event::UserEvent(event) => app.user_event(event_loop, event),
+        Event::OpenURLs { urls } => app.open_urls(event_loop, urls),
         Event::Suspended => app.suspended(event_loop),
         Event::Resumed => app.resumed(event_loop),
         Event::AboutToWait => app.about_to_wait(event_loop),

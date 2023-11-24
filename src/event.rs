@@ -64,6 +64,14 @@ pub enum Event<T: 'static> {
     /// [`ApplicationHandler::new_events`]: crate::application::ApplicationHandler::new_events
     NewEvents(StartCause),
 
+    /// Emitted if a user has requested to open one or more application specific URLs registered
+    /// with the OS
+    ///
+    /// # Portability
+    ///
+    /// This event is only ever delivered on MacOS currently
+    OpenURLs { urls: Vec<String> },
+
     /// See [`ApplicationHandler::window_event`] for details.
     ///
     /// [`ApplicationHandler::window_event`]: crate::application::ApplicationHandler::window_event
@@ -111,6 +119,7 @@ impl<T> Event<T> {
         use self::Event::*;
         match self {
             UserEvent(_) => Err(self),
+            OpenURLs { urls } => Ok(OpenURLs { urls }),
             WindowEvent { window_id, event } => Ok(WindowEvent { window_id, event }),
             DeviceEvent { device_id, event } => Ok(DeviceEvent { device_id, event }),
             NewEvents(cause) => Ok(NewEvents(cause)),

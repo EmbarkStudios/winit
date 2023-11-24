@@ -89,6 +89,16 @@ pub trait ApplicationHandler<T: 'static = ()> {
         let _ = (event_loop, event);
     }
 
+    /// Emitted if a user has requested to open an application specific URL that is registered with
+    /// the OS
+    ///
+    /// # Portability
+    ///
+    /// This event is only ever delivered on MacOS currently
+    fn open_urls(&mut self, event_loop: &ActiveEventLoop, urls: Vec<String>) {
+        let _ = (event_loop, urls);
+    }
+
     /// Emitted when the OS sends an event to a winit window.
     fn window_event(
         &mut self,
@@ -261,6 +271,11 @@ impl<A: ?Sized + ApplicationHandler<T>, T: 'static> ApplicationHandler<T> for &m
     }
 
     #[inline]
+    fn open_urls(&mut self, event_loop: &ActiveEventLoop, urls: Vec<String>) {
+        (**self).open_urls(event_loop, urls);
+    }
+
+    #[inline]
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         (**self).about_to_wait(event_loop);
     }
@@ -315,6 +330,11 @@ impl<A: ?Sized + ApplicationHandler<T>, T: 'static> ApplicationHandler<T> for Bo
         event: DeviceEvent,
     ) {
         (**self).device_event(event_loop, device_id, event);
+    }
+
+    #[inline]
+    fn open_urls(&mut self, event_loop: &ActiveEventLoop, urls: Vec<String>) {
+        (**self).open_urls(event_loop, urls);
     }
 
     #[inline]
