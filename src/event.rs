@@ -58,6 +58,15 @@ pub enum Event<'a, T: 'static> {
     /// [`ControlFlow::WaitUntil`](crate::event_loop::ControlFlow::WaitUntil) has elapsed.
     NewEvents(StartCause),
 
+    /// Emitted if a user has requested to open an application specific URL that is registered with the OS
+    ///
+    /// # Portability
+    ///
+    /// This event is only ever delivered on MacOS currently
+    OpenURL {
+        url: String
+    },
+
     /// Emitted when the OS sends an event to a winit window.
     WindowEvent {
         window_id: WindowId,
@@ -235,6 +244,7 @@ impl<T: Clone> Clone for Event<'static, T> {
     fn clone(&self) -> Self {
         use self::Event::*;
         match self {
+            OpenURL { url } => OpenURL { url: url.clone() },
             WindowEvent { window_id, event } => WindowEvent {
                 window_id: *window_id,
                 event: event.clone(),
@@ -260,6 +270,7 @@ impl<'a, T> Event<'a, T> {
         use self::Event::*;
         match self {
             UserEvent(_) => Err(self),
+            OpenURL { url } => Ok(OpenURL { url }),
             WindowEvent { window_id, event } => Ok(WindowEvent { window_id, event }),
             DeviceEvent { device_id, event } => Ok(DeviceEvent { device_id, event }),
             NewEvents(cause) => Ok(NewEvents(cause)),
@@ -277,6 +288,7 @@ impl<'a, T> Event<'a, T> {
     pub fn to_static(self) -> Option<Event<'static, T>> {
         use self::Event::*;
         match self {
+            OpenURL { url } => Some(OpenURL { url }),
             WindowEvent { window_id, event } => event
                 .to_static()
                 .map(|event| WindowEvent { window_id, event }),
