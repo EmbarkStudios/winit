@@ -65,6 +65,13 @@ pub enum Event<T: 'static> {
     /// [`ControlFlow::WaitUntil`](crate::event_loop::ControlFlow::WaitUntil) has elapsed.
     NewEvents(StartCause),
 
+    /// Emitted if a user has requested to open an application specific URL that is registered with the OS
+    ///
+    /// # Portability
+    ///
+    /// This event is only ever delivered on MacOS currently
+    OpenURL { url: String },
+
     /// Emitted when the OS sends an event to a winit window.
     WindowEvent {
         window_id: WindowId,
@@ -259,6 +266,7 @@ impl<T> Event<T> {
         use self::Event::*;
         match self {
             UserEvent(_) => Err(self),
+            OpenURL { url } => Ok(OpenURL { url }),
             WindowEvent { window_id, event } => Ok(WindowEvent { window_id, event }),
             DeviceEvent { device_id, event } => Ok(DeviceEvent { device_id, event }),
             NewEvents(cause) => Ok(NewEvents(cause)),
