@@ -1,5 +1,6 @@
 #![allow(clippy::single_match)]
 
+use log::LevelFilter;
 use simple_logger::SimpleLogger;
 use winit::{
     event::{Event, WindowEvent},
@@ -8,7 +9,7 @@ use winit::{
 };
 
 fn main() -> Result<(), impl std::error::Error> {
-    SimpleLogger::new().init().unwrap();
+    simple_logging::log_to_file("/tmp/test.log", LevelFilter::Info).unwrap();
     let event_loop = EventLoop::new();
 
     let window = WindowBuilder::new()
@@ -19,9 +20,12 @@ fn main() -> Result<(), impl std::error::Error> {
 
     event_loop.run(move |event, _, control_flow| {
         control_flow.set_wait();
-        println!("{event:?}");
+        //println!("{event:?}");
 
         match event {
+            Event::OpenURL { url } => {
+                log::info!("OpenURL Event: url = {url}");
+            }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 window_id,
