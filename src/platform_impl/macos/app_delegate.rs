@@ -1,10 +1,32 @@
-use objc2::foundation::NSObject;
+use objc2::foundation::{NSArray, NSObject, NSString};
 use objc2::rc::{Id, Shared};
 use objc2::runtime::Object;
-use objc2::{declare_class, msg_send, msg_send_id, ClassType};
+use objc2::{declare_class, extern_class, extern_methods, msg_send, msg_send_id, ClassType};
+
+use crate::event::Event;
 
 use super::app_state::AppState;
 use super::appkit::NSApplicationActivationPolicy;
+use super::event::EventWrapper;
+
+extern_class!(
+    #[derive(Debug)]
+    struct NSURL;
+    unsafe impl ClassType for NSURL {
+        type Super = NSObject;
+    }
+);
+
+unsafe impl Send for NSURL {}
+unsafe impl Sync for NSURL {}
+
+extern_methods!(
+    unsafe impl NSURL {
+        pub fn absolute_string(&self) -> Option<Id<NSString, Shared>> {
+            unsafe { msg_send_id![self, absoluteString] }
+        }
+    }
+);
 
 declare_class!(
     #[derive(Debug)]
@@ -51,6 +73,17 @@ declare_class!(
             trace_scope!("applicationWillTerminate:");
             // TODO: Notify every window that it will be destroyed, like done in iOS?
             AppState::exit();
+        }
+
+        #[sel(application:openURLs:)]
+        fn application_open_urls(&self, _application: &NSObject, urls: &NSArray<NSURL>) {
+            for url in urls {
+                if let Some(url) = url.absolute_string() {
+                    AppState::queue_event(EventWrapper::StaticEvent(Event::OpenURL {
+                        url: url.to_string(),
+                    }));
+                }
+            }
         }
     }
 );
