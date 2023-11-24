@@ -1,10 +1,12 @@
 use std::ptr::NonNull;
 
-use icrate::Foundation::NSObject;
+use icrate::Foundation::{NSObject, NSArray, NSURL};
 use objc2::declare::{IvarBool, IvarEncode};
 use objc2::rc::Id;
 use objc2::runtime::AnyObject;
 use objc2::{declare_class, msg_send, msg_send_id, mutability, ClassType};
+
+use crate::event::Event;
 
 use super::app_state::AppState;
 use super::appkit::NSApplicationActivationPolicy;
@@ -57,6 +59,17 @@ declare_class!(
             trace_scope!("applicationWillTerminate:");
             // TODO: Notify every window that it will be destroyed, like done in iOS?
             AppState::internal_exit();
+        }
+
+        #[method(application:openURLs:)]
+        fn application_open_urls(&self, _application: &NSObject, urls: &NSArray<NSURL>) {
+            for url in urls {
+                if let Some(url) = unsafe { url.absoluteString() } {
+                    AppState::queue_event(Event::OpenURL {
+                        url: url.to_string(),
+                    });
+                }
+            }
         }
     }
 );
