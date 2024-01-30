@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use icrate::Foundation::{NSObject, NSArray, NSURL};
+use icrate::Foundation::{NSArray, NSObject, NSURL};
 use objc2::declare::{IvarBool, IvarEncode};
 use objc2::rc::Id;
 use objc2::runtime::AnyObject;
