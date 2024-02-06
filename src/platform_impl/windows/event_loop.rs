@@ -1154,7 +1154,15 @@ unsafe fn public_window_callback_inner<T: 'static>(
             // after marking `WM_PAINT` as handled.
             result = ProcResult::Value(unsafe { DefWindowProcW(window, msg, wparam, lparam) });
             if std::mem::take(&mut userdata.window_state_lock().redraw_requested) {
-                unsafe { RedrawWindow(window, ptr::null(), 0, RDW_INTERNALPAINT) };
+                // TODO: we need a better solution for buffering redraws that can defer
+                // the RedrawWindow call until just before we poll for messages to
+                // avoid fighting with APIs like `MessageBoxW` that seem to try and
+                // flush pending redraws before starting to draw new modal dialogs.
+                // For now, we're assuming that our application redraws continuously
+                // and so it won't break if skip buffering these redraw requests.s
+                if !userdata.event_loop_runner.should_buffer() {
+                    unsafe { RedrawWindow(window, ptr::null(), 0, RDW_INTERNALPAINT) };
+                }
             }
         }
         WM_WINDOWPOSCHANGING => {
