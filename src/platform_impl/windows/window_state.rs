@@ -515,6 +515,21 @@ impl CursorFlags {
             // loop with `WM_MOUSEMOVE` events, and `refresh_os_cursor` is called by `set_cursor_flags`
             // which at times gets called once every iteration of the eventloop.
             if active_cursor_clip != cursor_clip.map(rect_to_tuple) {
+                let cursor_clip =
+                    if let (Some(rect), true) = (cursor_clip, self.contains(CursorFlags::HIDDEN)) {
+                        // Confine the cursor to the center of the window if the cursor is hidden. This avoids
+                        // problems with the cursor activating the taskbar if the window borders or overlaps that.
+                        let cx = (rect.left + rect.right) / 2;
+                        let cy = (rect.top + rect.bottom) / 2;
+                        Some(RECT {
+                            left: cx,
+                            right: cx + 1,
+                            top: cy,
+                            bottom: cy + 1,
+                        })
+                    } else {
+                        cursor_clip
+                    };
                 util::set_cursor_clip(cursor_clip)?;
             }
         }
