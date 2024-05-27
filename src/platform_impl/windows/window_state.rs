@@ -79,6 +79,7 @@ bitflags! {
         const GRABBED   = 1 << 0;
         const HIDDEN    = 1 << 1;
         const IN_WINDOW = 1 << 2;
+        const GRABBED_LOCKED = 1 << 3;
     }
 }
 bitflags! {
@@ -515,21 +516,31 @@ impl CursorFlags {
             // loop with `WM_MOUSEMOVE` events, and `refresh_os_cursor` is called by `set_cursor_flags`
             // which at times gets called once every iteration of the eventloop.
             if active_cursor_clip != cursor_clip.map(rect_to_tuple) {
-                let cursor_clip =
-                    if let (Some(rect), true) = (cursor_clip, self.contains(CursorFlags::HIDDEN)) {
-                        // Confine the cursor to the center of the window if the cursor is hidden. This avoids
-                        // problems with the cursor activating the taskbar if the window borders or overlaps that.
-                        let cx = (rect.left + rect.right) / 2;
-                        let cy = (rect.top + rect.bottom) / 2;
-                        Some(RECT {
-                            left: cx,
-                            right: cx + 1,
-                            top: cy,
-                            bottom: cy + 1,
-                        })
-                    } else {
-                        cursor_clip
-                    };
+                let cursor_clip = if self.contains(CursorFlags::GRABBED_LOCKED) {
+                    let mut pos = windows_sys::Win32::Foundation::POINT { x: 0, y: 0 };
+                    unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut pos) };
+
+                    Some(RECT {
+                        left: pos.x,
+                        right: pos.x + 1,
+                        top: pos.y,
+                        bottom: pos.y + 1,
+                    })
+                } else if let (Some(rect), true) = (cursor_clip, self.contains(CursorFlags::HIDDEN))
+                {
+                    // Confine the cursor to the center of the window if the cursor is hidden. This avoids
+                    // problems with the cursor activating the taskbar if the window borders or overlaps that.
+                    let cx = (rect.left + rect.right) / 2;
+                    let cy = (rect.top + rect.bottom) / 2;
+                    Some(RECT {
+                        left: cx,
+                        right: cx + 1,
+                        top: cy,
+                        bottom: cy + 1,
+                    })
+                } else {
+                    cursor_clip
+                };
                 util::set_cursor_clip(cursor_clip)?;
             }
         }
