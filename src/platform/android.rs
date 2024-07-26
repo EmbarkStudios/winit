@@ -6,12 +6,22 @@ use crate::{
 use android_activity::{AndroidApp, ConfigurationRef, Rect};
 
 /// Additional methods on [`EventLoop`] that are specific to Android.
-pub trait EventLoopExtAndroid {}
+pub trait EventLoopExtAndroid {
+    /// Get the [`AndroidApp`] which was used to create this event loop.
+    fn android_app(&self) -> &AndroidApp;
+}
 
-impl<T> EventLoopExtAndroid for EventLoop<T> {}
+impl<T> EventLoopExtAndroid for EventLoop<T> {
+    fn android_app(&self) -> &AndroidApp {
+        &self.event_loop.android_app
+    }
+}
 
 /// Additional methods on [`EventLoopWindowTarget`] that are specific to Android.
-pub trait EventLoopWindowTargetExtAndroid {}
+pub trait EventLoopWindowTargetExtAndroid {
+    /// Get the [`AndroidApp`] which was used to create this event loop.
+    fn android_app(&self) -> &AndroidApp;
+}
 
 /// Additional methods on [`Window`] that are specific to Android.
 pub trait WindowExtAndroid {
@@ -30,7 +40,11 @@ impl WindowExtAndroid for Window {
     }
 }
 
-impl<T> EventLoopWindowTargetExtAndroid for EventLoopWindowTarget<T> {}
+impl<T> EventLoopWindowTargetExtAndroid for EventLoopWindowTarget<T> {
+    fn android_app(&self) -> &AndroidApp {
+        &self.p.app
+    }
+}
 
 /// Additional methods on [`WindowBuilder`] that are specific to Android.
 pub trait WindowBuilderExtAndroid {}
@@ -38,9 +52,9 @@ pub trait WindowBuilderExtAndroid {}
 impl WindowBuilderExtAndroid for WindowBuilder {}
 
 pub trait EventLoopBuilderExtAndroid {
-    /// Associates the `AndroidApp` that was passed to `android_main()` with the event loop
+    /// Associates the [`AndroidApp`] that was passed to `android_main()` with the event loop
     ///
-    /// This must be called on Android since the `AndroidApp` is not global state.
+    /// This must be called on Android since the [`AndroidApp`] is not global state.
     fn with_android_app(&mut self, app: AndroidApp) -> &mut Self;
 
     /// Calling this will mark the volume keys to be manually handled by the application
@@ -77,7 +91,7 @@ impl<T> EventLoopBuilderExtAndroid for EventLoopBuilder<T> {
 /// depending on the `android_activity` crate, and instead consume the API that
 /// is re-exported by Winit.
 ///
-/// For compatibility applications should then import the `AndroidApp` type for
+/// For compatibility applications should then import the [`AndroidApp`] type for
 /// their `android_main(app: AndroidApp)` function like:
 /// ```rust
 /// #[cfg(target_os="android")]
